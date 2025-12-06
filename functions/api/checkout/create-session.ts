@@ -47,7 +47,10 @@ const normalizeOrigin = (request: Request) => {
   return origin.replace(/\/$/, '');
 };
 
-export const onRequestPost = async (context: { request: Request; env: { DB: D1Database; STRIPE_SECRET_KEY?: string } }) => {
+export const onRequestPost = async (context: {
+  request: Request;
+  env: { DB: D1Database; STRIPE_SECRET_KEY?: string; VITE_PUBLIC_SITE_URL?: string };
+}) => {
   const { request, env } = context;
   const stripeSecretKey = env.STRIPE_SECRET_KEY;
 
@@ -115,37 +118,50 @@ export const onRequestPost = async (context: { request: Request; env: { DB: D1Da
     }
 
     const stripe = createStripeClient(stripeSecretKey);
-    const origin = normalizeOrigin(request);
-
-    const priceId = product.stripe_price_id;
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      ui_mode: 'embedded',
-      line_items: [
-        {
-          price: priceId,
-          quantity,
-        },
-      ],
-      return_url: `${origin}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
-      metadata: {
-        product_id: product.id,
-        product_slug: product.slug || '',
-      },
-      consent_collection: {
-        promotions: 'auto',
-      },
-      shipping_address_collection: {
-        allowed_countries: ['US', 'CA'],
-      },
-    });
-
-    if (!session.client_secret) {
-      console.error('Stripe did not return a client_secret', session.id);
-      return json({ error: 'Unable to create checkout session' }, 500);
+    const baseUrl = env.VITE_PUBLIC_SITE_URL || normalizeOrigin(request);
+    if (!baseUrl) {
+      console.error('Missing VITE_PUBLIC_SITE_URL in env');
+      return json({ error: 'Server configuration error: missing site URL' }, 500);
     }
 
-    return json({ clientSecret: session.client_secret });
+    const priceId = product.stripe_price_id;
+    try {
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        ui_mode: 'embedded',
+        line_items: [
+          {
+            price: priceId,
+            quantity,
+          },
+        ],
+        return_url: `${baseUrl}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
+        metadata: {
+          product_id: product.id,
+          product_slug: product.slug || '',
+        },
+        consent_collection: {
+          promotions: 'auto',
+        },
+        shipping_address_collection: {
+          allowed_countries: ['US', 'CA'],
+        },
+      });
+
+      if (!session.client_secret) {
+        console.error('Stripe did not return a client_secret', session.id);
+        return json({ error: 'Unable to create checkout session' }, 500);
+      }
+
+      return json({ clientSecret: session.client_secret, sessionId: session.id });
+    } catch (stripeError: any) {
+      console.error('Stripe checkout session error:', stripeError?.message || stripeError, stripeError?.raw);
+      const message =
+        stripeError?.raw?.message ||
+        stripeError?.message ||
+        'Failed to create checkout session';
+      return json({ error: message }, 500);
+    }
   } catch (error) {
     console.error('Error creating embedded checkout session', error);
     return json({ error: 'Failed to create checkout session' }, 500);
