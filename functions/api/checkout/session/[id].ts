@@ -31,16 +31,39 @@ export const onRequestGet = async (context: {
   try {
     const stripe = createStripeClient(env.STRIPE_SECRET_KEY);
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['line_items'],
+      expand: [
+        'line_items.data.price.product',
+        'payment_intent.payment_method',
+      ],
     });
+
+    const lineItems =
+      session.line_items?.data.map((li) => ({
+        productName:
+          (typeof li.price?.product === 'object' && li.price?.product
+            ? (li.price.product as Stripe.Product).name
+            : undefined) ||
+          (typeof li.price?.product === 'string' ? li.price.product : 'Item'),
+        quantity: li.quantity ?? 0,
+        lineTotal: li.amount_total ?? 0,
+      })) ?? [];
+
+    const cardLast4 =
+      session.payment_intent && typeof session.payment_intent !== 'string'
+        ? (session.payment_intent.payment_method as any)?.card?.last4 ?? null
+        : null;
 
     return json({
       id: session.id,
-      status: session.status,
-      paymentStatus: session.payment_status,
-      amountTotal: session.amount_total,
+      amount_total: session.amount_total,
       currency: session.currency,
-      metadata: session.metadata,
+      customer_email: session.customer_details?.email ?? null,
+      shipping: {
+        name: session.shipping?.name ?? null,
+        address: session.shipping?.address ?? null,
+      },
+      line_items: lineItems,
+      card_last4: cardLast4,
     });
   } catch (error) {
     console.error('Failed to retrieve checkout session', error);

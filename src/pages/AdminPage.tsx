@@ -13,7 +13,8 @@ import {
   adminUpdateProduct,
   adminDeleteProduct,
 } from '../lib/api';
-import { GalleryImage, HeroConfig, HeroImage, Order, Product } from '../lib/types';
+import { GalleryImage, HeroConfig, HeroImage, Product } from '../lib/types';
+import type { AdminOrder } from '../lib/db/orders';
 
 type ProductFormState = {
   name: string;
@@ -60,7 +61,7 @@ export function AdminPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [soldProducts, setSoldProducts] = useState<Product[]>([]);
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);

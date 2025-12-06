@@ -16,7 +16,7 @@ import {
   saveGalleryImages as persistGalleryImages,
   saveHomeHeroConfig as persistHomeHeroConfig,
 } from './db/content';
-import { getOrders, validateCart as validateCartFromDb } from './db/orders';
+import { getAdminOrders } from './db/orders';
 import { getReviewsForProduct } from './db/reviews';
 import { createEmbeddedCheckoutSession, fetchCheckoutSession } from './payments/checkout';
 import { sendContactEmail } from './contact';
@@ -28,7 +28,7 @@ import { verifyAdminPassword } from './auth';
 export const fetchProducts = getActiveProducts;
 export const fetchProductById = getProductById;
 export const fetchRelatedProducts = getRelatedProducts;
-export const fetchOrders = getOrders;
+export const fetchOrders = getAdminOrders;
 export const fetchSoldProducts = getSoldProducts;
 export const adminFetchProducts = fetchAdminProducts;
 export const adminCreateProduct = createAdminProduct;
@@ -39,6 +39,6 @@ export const saveGalleryImages = persistGalleryImages;
 export const fetchHomeHeroConfig = getHomeHeroConfig;
 export const saveHomeHeroConfig = persistHomeHeroConfig;
 export const fetchReviewsForProduct = getReviewsForProduct;
-export const validateCart = validateCartFromDb;
+// validateCart is no longer exported here (orders/cart validation will be wired separately if needed)
 
 export { createEmbeddedCheckoutSession, fetchCheckoutSession, sendContactEmail, verifyAdminPassword };

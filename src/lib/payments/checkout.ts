@@ -4,11 +4,19 @@ export interface EmbeddedCheckoutSession {
 
 export interface CheckoutSessionInfo {
   id: string;
-  status: string | null;
-  paymentStatus: string | null;
   amountTotal: number | null;
   currency: string | null;
-  metadata?: Record<string, string>;
+  customerEmail: string | null;
+  shipping: {
+    name: string | null;
+    address: Record<string, string | null> | null;
+  } | null;
+  lineItems: {
+    productName: string;
+    quantity: number;
+    lineTotal: number;
+  }[];
+  cardLast4: string | null;
 }
 
 export async function createEmbeddedCheckoutSession(productId: string, quantity = 1): Promise<EmbeddedCheckoutSession> {
@@ -54,11 +62,18 @@ export async function fetchCheckoutSession(sessionId: string): Promise<CheckoutS
   const data = await response.json();
   return {
     id: data.id as string,
-    status: (data.status as string) ?? null,
-    paymentStatus: (data.paymentStatus as string) ?? null,
-    amountTotal: data.amountTotal ?? null,
+    amountTotal: data.amount_total ?? null,
     currency: data.currency ?? null,
-    metadata: data.metadata as Record<string, string> | undefined,
+    customerEmail: data.customer_email ?? null,
+    shipping: data.shipping ?? null,
+    lineItems: Array.isArray(data.line_items)
+      ? data.line_items.map((li: any) => ({
+          productName: li.productName ?? 'Item',
+          quantity: li.quantity ?? 0,
+          lineTotal: li.lineTotal ?? 0,
+        }))
+      : [],
+    cardLast4: data.card_last4 ?? null,
   };
 }
 

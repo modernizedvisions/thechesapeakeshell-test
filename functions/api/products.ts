@@ -32,13 +32,28 @@ export async function onRequestGet(context: { env: { DB: D1Database }; request: 
   try {
     await ensureProductSchema(context.env.DB);
 
-    const statement = context.env.DB.prepare(`
-      SELECT id, name, slug, description, price_cents, category, image_url, image_urls_json, is_active,
-             is_one_off, is_sold, quantity_available, stripe_price_id, stripe_product_id, collection, created_at
-      FROM products
-      WHERE is_active = 1 OR is_active IS NULL
-      ORDER BY created_at DESC;
-    `);
+    const url = new URL(context.request.url);
+    const filter = url.searchParams.get('filter');
+
+    const isSoldFilter = filter === 'sold';
+
+    const statement = isSoldFilter
+      ? context.env.DB.prepare(`
+          SELECT id, name, slug, description, price_cents, category, image_url, image_urls_json, is_active,
+                 is_one_off, is_sold, quantity_available, stripe_price_id, stripe_product_id, collection, created_at
+          FROM products
+          WHERE (is_sold = 1 OR quantity_available = 0)
+          ORDER BY created_at DESC;
+        `)
+      : context.env.DB.prepare(`
+          SELECT id, name, slug, description, price_cents, category, image_url, image_urls_json, is_active,
+                 is_one_off, is_sold, quantity_available, stripe_price_id, stripe_product_id, collection, created_at
+          FROM products
+          WHERE (is_active = 1 OR is_active IS NULL)
+            AND (is_sold IS NULL OR is_sold = 0)
+            AND (quantity_available IS NULL OR quantity_available > 0)
+          ORDER BY created_at DESC;
+        `);
 
     const { results } = await statement.all<ProductRow>();
     const products: Product[] = (results || []).map((row) => {

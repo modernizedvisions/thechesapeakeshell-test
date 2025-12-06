@@ -38,7 +38,7 @@ export function HomePage() {
   const loadAllProducts = async () => {
     try {
       const products = await fetchProducts({ visible: true });
-      setAllProducts(products.filter((p) => !p.isSold));
+      setAllProducts(products);
     } catch (error) {
       console.error('Error loading products:', error);
     } finally {

@@ -1,7 +1,4 @@
 import type { Product } from '../types';
-import { mockProducts } from './mockData';
-import { getLocalProducts } from './localProducts';
-
 const PRODUCTS_API_PATH = '/api/products';
 
 async function fetchProductsFromApi(): Promise<Product[] | null> {
@@ -33,15 +30,7 @@ export async function getActiveProducts(filters?: {
 }): Promise<Product[]> {
   let products: Product[] = [];
 
-  const useMocks =
-    import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_PRODUCTS === 'true';
-
-  if (useMocks) {
-    const cachedProducts = getLocalProducts();
-    products = cachedProducts && cachedProducts.length ? cachedProducts : [...mockProducts];
-  } else {
-    products = await fetchProductsFromApi();
-  }
+  products = await fetchProductsFromApi();
 
   if (filters?.visible !== undefined) {
     products = products.filter((p) => p.visible === filters.visible);
@@ -90,7 +79,23 @@ export async function getRelatedProducts(type: string, excludeProductId: string)
 }
 
 export async function getSoldProducts(): Promise<Product[]> {
-  const products = getLocalProducts();
-  const dataset = products.length ? products : mockProducts;
-  return dataset.filter((p) => p.isSold);
+  try {
+    const response = await fetch(`${PRODUCTS_API_PATH}?filter=sold`, {
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Products API responded with ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || !Array.isArray(data.products)) {
+      throw new Error('Products API response missing products array');
+    }
+
+    return data.products as Product[];
+  } catch (error) {
+    console.error('Sold products API failed', error);
+    throw error;
+  }
 }
