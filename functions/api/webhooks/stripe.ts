@@ -52,8 +52,16 @@ export const onRequestPost = async (context: {
 
   try {
     if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
+      const sessionSummary = event.data.object as Stripe.Checkout.Session;
+      const session = await createStripeClient(env.STRIPE_SECRET_KEY).checkout.sessions.retrieve(
+        sessionSummary.id,
+        {
+          expand: ['line_items.data.price.product'],
+        }
+      );
+
       const productId = session.metadata?.product_id;
+      const quantityFromMeta = session.metadata?.quantity ? Number(session.metadata.quantity) : 1;
 
       if (productId) {
         const result = await env.DB.prepare(
@@ -78,6 +86,87 @@ export const onRequestPost = async (context: {
 
         if (!result.success) {
           console.error('Failed to update product as sold', result.error);
+        }
+
+        // Insert order + order_items (best effort; do not throw).
+        try {
+          const orderId = crypto.randomUUID();
+          const orderResult = await env.DB.prepare(
+            `
+            INSERT INTO orders (
+              id, stripe_payment_intent_id, total_cents, customer_email, shipping_name, shipping_address_json
+            ) VALUES (?, ?, ?, ?, ?, ?);
+          `
+          )
+            .bind(
+              orderId,
+              session.payment_intent?.toString() || null,
+              session.amount_total ?? 0,
+              session.customer_details?.email || null,
+              session.shipping_details?.name || null,
+              JSON.stringify(session.shipping_details?.address ?? null)
+            )
+            .run();
+
+          if (!orderResult.success) {
+            console.error('Failed to insert order into D1', orderResult.error);
+          } else {
+            const lineItems = session.line_items?.data || [];
+            if (lineItems.length) {
+              for (const line of lineItems) {
+                const itemId = crypto.randomUUID();
+                const qty = line.quantity ?? 1;
+                const priceCents = line.price?.unit_amount ?? 0;
+                // Prefer the product id from the price.product if present; fall back to metadata.product_id.
+                const productIdFromPrice =
+                  typeof line.price?.product === 'string'
+                    ? line.price.product
+                    : (line.price?.product as Stripe.Product | undefined)?.id;
+                const resolvedProductId = productIdFromPrice || productId;
+
+                const itemResult = await env.DB.prepare(
+                  `
+                  INSERT INTO order_items (id, order_id, product_id, quantity, price_cents)
+                  VALUES (?, ?, ?, ?, ?);
+                `
+                )
+                  .bind(itemId, orderId, resolvedProductId, qty, priceCents)
+                  .run();
+
+                if (!itemResult.success) {
+                  console.error('Failed to insert order_items into D1', itemResult.error);
+                }
+              }
+              console.log('Inserted order and items', { orderId, items: lineItems.length });
+            } else {
+              // Fallback: insert a single item using metadata product/quantity if no line_items were returned.
+              const itemId = crypto.randomUUID();
+              const itemResult = await env.DB.prepare(
+                `
+                INSERT INTO order_items (id, order_id, product_id, quantity, price_cents)
+                VALUES (?, ?, ?, ?, ?);
+              `
+              )
+                .bind(
+                  itemId,
+                  orderId,
+                  productId,
+                  quantityFromMeta || 1,
+                  session.amount_subtotal && quantityFromMeta > 0
+                    ? Math.floor(session.amount_subtotal / (quantityFromMeta || 1))
+                    : 0
+                )
+                .run();
+
+              if (!itemResult.success) {
+                console.error('Failed to insert order_items into D1 (fallback)', itemResult.error);
+              } else {
+                console.log('Inserted order and fallback item', { orderId, productId });
+              }
+            }
+          }
+        } catch (orderErr) {
+          console.error('Failed to persist order/order_items in D1', orderErr);
         }
       } else {
         console.warn('Checkout session missing product_id metadata');
