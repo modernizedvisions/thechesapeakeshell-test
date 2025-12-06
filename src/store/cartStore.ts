@@ -1,23 +1,47 @@
 import { create } from 'zustand';
-import { CartItem } from '../lib/types';
+import { CartItem, CartItemLegacy } from '../lib/types';
 
 interface CartStore {
   items: CartItem[];
   addItem: (item: CartItem) => void;
-  removeItem: (stripeProductId: string) => void;
-  updateQuantity: (stripeProductId: string, quantity: number) => void;
+  removeItem: (productId: string) => void;
+  updateQuantity: (productId: string, quantity: number) => void;
   clearCart: () => void;
-  isOneOffInCart: (stripeProductId: string) => boolean;
+  isOneOffInCart: (productId: string) => boolean;
   getTotalItems: () => number;
   getSubtotal: () => number;
 }
 
 const CART_STORAGE_KEY = 'artist-cart';
 
-const loadCartFromStorage = (): CartItem[] => {
+const getStorage = () => {
+  if (typeof localStorage === 'undefined') return null;
   try {
-    const stored = localStorage.getItem(CART_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    return localStorage;
+  } catch {
+    return null;
+  }
+};
+
+const loadCartFromStorage = (): CartItem[] => {
+  const storage = getStorage();
+  if (!storage) return [];
+  try {
+    const stored = storage.getItem(CART_STORAGE_KEY);
+    if (!stored) return [];
+    const parsed = JSON.parse(stored) as Array<CartItem | CartItemLegacy>;
+    return Array.isArray(parsed)
+      ? parsed.map((item) => ({
+          productId: (item as CartItem).productId || (item as CartItemLegacy).stripeProductId,
+          name: item.name,
+          priceCents: item.priceCents,
+          quantity: item.quantity,
+          imageUrl: item.imageUrl,
+          oneoff: item.oneoff,
+          stripeProductId: (item as CartItem).stripeProductId ?? (item as CartItemLegacy).stripeProductId ?? null,
+          stripePriceId: (item as CartItem).stripePriceId ?? (item as CartItemLegacy).stripePriceId ?? null,
+        }))
+      : [];
   } catch (error) {
     console.error('Error loading cart from storage:', error);
     return [];
@@ -25,8 +49,10 @@ const loadCartFromStorage = (): CartItem[] => {
 };
 
 const saveCartToStorage = (items: CartItem[]) => {
+  const storage = getStorage();
+  if (!storage) return;
   try {
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+    storage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
   } catch (error) {
     console.error('Error saving cart to storage:', error);
   }
@@ -37,13 +63,11 @@ export const useCartStore = create<CartStore>((set, get) => ({
 
   addItem: (item: CartItem) => {
     set((state) => {
-      if (item.oneoff && state.items.some(i => i.stripeProductId === item.stripeProductId)) {
+      if (item.oneoff && state.items.some((i) => i.productId === item.productId)) {
         return state;
       }
 
-      const existingIndex = state.items.findIndex(
-        i => i.stripeProductId === item.stripeProductId
-      );
+      const existingIndex = state.items.findIndex((i) => i.productId === item.productId);
 
       let newItems: CartItem[];
 
@@ -64,33 +88,29 @@ export const useCartStore = create<CartStore>((set, get) => ({
     });
   },
 
-  removeItem: (stripeProductId: string) => {
+  removeItem: (productId: string) => {
     set((state) => {
-      const newItems = state.items.filter(i => i.stripeProductId !== stripeProductId);
+      const newItems = state.items.filter((i) => i.productId !== productId);
       saveCartToStorage(newItems);
       return { items: newItems };
     });
   },
 
-  updateQuantity: (stripeProductId: string, quantity: number) => {
+  updateQuantity: (productId: string, quantity: number) => {
     set((state) => {
-      const item = state.items.find(i => i.stripeProductId === stripeProductId);
+      const item = state.items.find((i) => i.productId === productId);
 
       if (item?.oneoff) {
         return state;
       }
 
       if (quantity <= 0) {
-        const newItems = state.items.filter(i => i.stripeProductId !== stripeProductId);
+        const newItems = state.items.filter((i) => i.productId !== productId);
         saveCartToStorage(newItems);
         return { items: newItems };
       }
 
-      const newItems = state.items.map(i =>
-        i.stripeProductId === stripeProductId
-          ? { ...i, quantity }
-          : i
-      );
+      const newItems = state.items.map((i) => (i.productId === productId ? { ...i, quantity } : i));
 
       saveCartToStorage(newItems);
       return { items: newItems };
@@ -102,9 +122,9 @@ export const useCartStore = create<CartStore>((set, get) => ({
     set({ items: [] });
   },
 
-  isOneOffInCart: (stripeProductId: string) => {
+  isOneOffInCart: (productId: string) => {
     const items = get().items;
-    return items.some(item => item.stripeProductId === stripeProductId && item.oneoff);
+    return items.some((item) => item.productId === productId && item.oneoff);
   },
 
   getTotalItems: () => {

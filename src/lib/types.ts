@@ -19,6 +19,17 @@ export interface Product {
 }
 
 export interface CartItem {
+  productId: string;
+  name: string;
+  priceCents: number;
+  quantity: number;
+  imageUrl?: string;
+  oneoff?: boolean;
+  stripeProductId?: string | null;
+  stripePriceId?: string | null;
+}
+
+export interface CartItemLegacy {
   stripeProductId: string;
   stripePriceId: string;
   name: string;

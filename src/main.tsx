@@ -7,6 +7,7 @@ import { ShopPage } from './pages/ShopPage';
 import { GalleryPage } from './pages/GalleryPage';
 import { AboutPage } from './pages/AboutPage';
 import { CheckoutPage } from './pages/CheckoutPage';
+import { CheckoutReturnPage } from './pages/CheckoutReturnPage';
 import { AdminPage } from './pages/AdminPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import './index.css';
@@ -22,6 +23,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="gallery" element={<GalleryPage />} />
           <Route path="about" element={<AboutPage />} />
           <Route path="checkout" element={<CheckoutPage />} />
+          <Route path="checkout/return" element={<CheckoutReturnPage />} />
           <Route path="admin" element={<AdminPage />} />
         </Route>
       </Routes>

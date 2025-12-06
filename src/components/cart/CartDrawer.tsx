@@ -15,8 +15,10 @@ export function CartDrawer() {
   if (!isOpen) return null;
 
   const handleCheckout = () => {
+    if (!items.length) return;
     setCartDrawerOpen(false);
-    navigate('/checkout');
+    const productId = items[0].productId;
+    navigate(`/checkout?productId=${encodeURIComponent(productId)}`);
   };
 
   return (
@@ -44,7 +46,7 @@ export function CartDrawer() {
           ) : (
             <div className="space-y-4">
               {items.map((item) => (
-                <div key={item.stripeProductId} className="flex gap-4 pb-4 border-b border-gray-200">
+                <div key={item.productId} className="flex gap-4 pb-4 border-b border-gray-200">
                   {item.imageUrl && (
                     <img
                       src={item.imageUrl}
@@ -68,14 +70,14 @@ export function CartDrawer() {
                       ) : (
                         <div className="flex items-center gap-2">
                           <button
-                            onClick={() => updateQuantity(item.stripeProductId, item.quantity - 1)}
+                            onClick={() => updateQuantity(item.productId, item.quantity - 1)}
                             className="p-1 hover:bg-gray-100 rounded"
                           >
                             <Minus className="w-4 h-4" />
                           </button>
                           <span className="w-8 text-center">{item.quantity}</span>
                           <button
-                            onClick={() => updateQuantity(item.stripeProductId, item.quantity + 1)}
+                            onClick={() => updateQuantity(item.productId, item.quantity + 1)}
                             className="p-1 hover:bg-gray-100 rounded"
                           >
                             <Plus className="w-4 h-4" />
@@ -83,7 +85,7 @@ export function CartDrawer() {
                         </div>
                       )}
                       <button
-                        onClick={() => removeItem(item.stripeProductId)}
+                        onClick={() => removeItem(item.productId)}
                         className="ml-auto p-1 hover:bg-red-50 text-red-600 rounded"
                       >
                         <Trash2 className="w-4 h-4" />

@@ -18,7 +18,7 @@ import {
 } from './db/content';
 import { getOrders, validateCart as validateCartFromDb } from './db/orders';
 import { getReviewsForProduct } from './db/reviews';
-import { createEmbeddedCheckoutSession } from './payments/checkout';
+import { createEmbeddedCheckoutSession, fetchCheckoutSession } from './payments/checkout';
 import { sendContactEmail } from './contact';
 import { verifyAdminPassword } from './auth';
 
@@ -41,4 +41,4 @@ export const saveHomeHeroConfig = persistHomeHeroConfig;
 export const fetchReviewsForProduct = getReviewsForProduct;
 export const validateCart = validateCartFromDb;
 
-export { createEmbeddedCheckoutSession, sendContactEmail, verifyAdminPassword };
+export { createEmbeddedCheckoutSession, fetchCheckoutSession, sendContactEmail, verifyAdminPassword };

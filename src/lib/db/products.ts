@@ -21,23 +21,27 @@ async function fetchProductsFromApi(): Promise<Product[] | null> {
 
     return data.products as Product[];
   } catch (error) {
-    console.error('Falling back to mock products', error);
-    return null;
+    console.error('Products API failed', error);
+    throw error;
   }
 }
-
-// TODO: Replace these in-memory lookups with Cloudflare D1 queries.
-// The website/admin is the source of truth; Stripe will only be used for payments.
 
 export async function getActiveProducts(filters?: {
   type?: string;
   collection?: string;
   visible?: boolean;
 }): Promise<Product[]> {
-  const liveProducts = await fetchProductsFromApi();
-  const cachedProducts = getLocalProducts();
-  let products =
-    liveProducts && liveProducts.length ? liveProducts : cachedProducts && cachedProducts.length ? cachedProducts : [...mockProducts];
+  let products: Product[] = [];
+
+  const useMocks =
+    import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_PRODUCTS === 'true';
+
+  if (useMocks) {
+    const cachedProducts = getLocalProducts();
+    products = cachedProducts && cachedProducts.length ? cachedProducts : [...mockProducts];
+  } else {
+    products = await fetchProductsFromApi();
+  }
 
   if (filters?.visible !== undefined) {
     products = products.filter((p) => p.visible === filters.visible);

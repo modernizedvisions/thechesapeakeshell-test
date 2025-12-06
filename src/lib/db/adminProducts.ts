@@ -49,8 +49,8 @@ export async function fetchAdminProducts(): Promise<Product[]> {
     const data = await handleResponse(response);
     return Array.isArray(data.products) ? (data.products as Product[]) : [];
   } catch (error) {
-    console.warn('Admin products API unavailable, using local cache.', error);
-    return getLocalProducts();
+    console.error('Admin products API unavailable', error);
+    throw error;
   }
 }
 
@@ -64,8 +64,8 @@ export async function createAdminProduct(input: AdminProductInput): Promise<Prod
     const data = await handleResponse(response);
     return data.product ?? null;
   } catch (error) {
-    console.warn('Create product failed against API, falling back to local cache.', error);
-    return addLocalProduct(input);
+    console.error('Create product failed against API', error);
+    throw error;
   }
 }
 
@@ -79,8 +79,8 @@ export async function updateAdminProduct(id: string, input: AdminProductUpdateIn
     const data = await handleResponse(response);
     return data.product ?? null;
   } catch (error) {
-    console.warn('Update product failed against API, persisting locally instead.', error);
-    return updateLocalProduct(id, input);
+    console.error('Update product failed against API', error);
+    throw error;
   }
 }
 
@@ -92,7 +92,7 @@ export async function deleteAdminProduct(id: string): Promise<void> {
     });
     await handleResponse(response);
   } catch (error) {
-    console.warn('Delete product failed against API, removing from local cache.', error);
-    deleteLocalProduct(id);
+    console.error('Delete product failed against API', error);
+    throw error;
   }
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchHomeHeroConfig, fetchProducts } from '../lib/api';
 import { HeroConfig, Product } from '../lib/types';
 import { useCartStore } from '../store/cartStore';
+import { useUIStore } from '../store/uiStore';
 import { SocialSection } from '../components/SocialSection';
 import { ContactForm } from '../components/ContactForm';
 import HeroShowcase from '../components/HeroShowcase';
@@ -26,6 +27,7 @@ export function HomePage() {
 
   const addItem = useCartStore((state) => state.addItem);
   const isOneOffInCart = useCartStore((state) => state.isOneOffInCart);
+  const setCartDrawerOpen = useUIStore((state) => state.setCartDrawerOpen);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -71,16 +73,18 @@ export function HomePage() {
 
   const handleAddToCart = (product: Product) => {
     if (!product.priceCents || !product.stripePriceId) return;
-    if (product.oneoff && isOneOffInCart(product.stripeProductId)) return;
+    if (product.oneoff && isOneOffInCart(product.id)) return;
     addItem({
-      stripeProductId: product.stripeProductId,
-      stripePriceId: product.stripePriceId,
+      productId: product.id,
       name: product.name,
       priceCents: product.priceCents,
       quantity: 1,
       imageUrl: product.thumbnailUrl || product.imageUrl,
       oneoff: product.oneoff,
+      stripeProductId: product.stripeProductId ?? null,
+      stripePriceId: product.stripePriceId ?? null,
     });
+    setCartDrawerOpen(true);
   };
 
   const formatPrice = (priceCents?: number) => {
@@ -117,8 +121,7 @@ export function HomePage() {
                   onNavigate={() => navigate(`/shop?type=${encodeURIComponent(cat.query)}`)}
                   isCartDisabled={
                     !cat.product.priceCents ||
-                    !cat.product.stripePriceId ||
-                    (cat.product.oneoff && isOneOffInCart(cat.product.stripeProductId))
+                    (cat.product.oneoff && isOneOffInCart(cat.product.id))
                   }
                   priceLabel={formatPrice(cat.product.priceCents)}
                 />
