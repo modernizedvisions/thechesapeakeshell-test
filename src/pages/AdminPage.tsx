@@ -62,6 +62,8 @@ export function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const [soldProducts, setSoldProducts] = useState<Product[]>([]);
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
@@ -82,6 +84,29 @@ export function AdminPage() {
   const heroMainFileInputRef = useRef<HTMLInputElement | null>(null);
   const productImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const editProductImageFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const filteredOrders = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return orders;
+
+    return orders.filter((order) => {
+      const idMatch = order.id.toLowerCase().includes(q);
+      const nameMatch = (order.customerName ?? '').toLowerCase().includes(q);
+      const emailMatch = (order.customerEmail ?? '').toLowerCase().includes(q);
+      const productMatch = order.items?.some((item) =>
+        (item.productName ?? '').toLowerCase().includes(q)
+      );
+      return idMatch || nameMatch || emailMatch || productMatch;
+    });
+  }, [orders, searchQuery]);
+
+  const formatCurrency = (cents: number, currency: string = 'usd') => {
+    const amount = (cents ?? 0) / 100;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+    }).format(amount);
+  };
 
   const handleSaveHeroConfig = async () => {
     setHomeSaveState('saving');
@@ -413,6 +438,7 @@ export function AdminPage() {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
@@ -482,7 +508,16 @@ export function AdminPage() {
 
         {activeTab === 'orders' && (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            {orders.length === 0 ? (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3 px-6 pt-6">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by order ID, customer, or product..."
+                className="w-full sm:max-w-md border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
+              />
+            </div>
+            {filteredOrders.length === 0 ? (
               <div className="p-8 text-center text-gray-500">No orders yet</div>
             ) : (
               <div className="overflow-x-auto">
@@ -501,19 +536,19 @@ export function AdminPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         Total
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Status
+                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {orders.map((order) => (
+                    {filteredOrders.map((order) => (
                       <tr key={order.id}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {new Date(order.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
-                          <div>{order.shippingName || 'Customer'}</div>
+                          <div>{order.shippingName || order.customerName || 'Customer'}</div>
                           <div className="text-gray-500">{order.customerEmail || 'No email'}</div>
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
@@ -522,10 +557,14 @@ export function AdminPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           ${(order.totalCents / 100).toFixed(2)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-                            Paid
-                          </span>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(order)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                          >
+                            View
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -1038,6 +1077,121 @@ export function AdminPage() {
         )}
       </div>
     </div>
+
+    {selectedOrder && (
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40">
+        <div className="bg-white rounded-xl shadow-lg max-w-xl w-full mx-4 p-6 relative">
+          <button
+            type="button"
+            onClick={() => setSelectedOrder(null)}
+            className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 text-sm"
+          >
+            Close
+          </button>
+
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Order {selectedOrder.id}
+            </h2>
+            <p className="text-xs text-gray-500">
+              Placed on {new Date(selectedOrder.createdAt).toLocaleString()}
+            </p>
+          </div>
+
+          <div className="space-y-4 text-sm">
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                Customer
+              </h3>
+              <p className="font-medium text-gray-900">
+                {selectedOrder.customerName || selectedOrder.shippingName || 'Unknown customer'}
+              </p>
+              {selectedOrder.customerEmail && (
+                <p className="text-gray-600">{selectedOrder.customerEmail}</p>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                Shipping Address
+              </h3>
+              {selectedOrder.shippingAddress ? (
+                <div className="text-gray-700">
+                  {selectedOrder.shippingAddress.line1 && (
+                    <p>{selectedOrder.shippingAddress.line1}</p>
+                  )}
+                  {selectedOrder.shippingAddress.line2 && (
+                    <p>{selectedOrder.shippingAddress.line2}</p>
+                  )}
+                  {(selectedOrder.shippingAddress.city ||
+                    selectedOrder.shippingAddress.state ||
+                    selectedOrder.shippingAddress.postal_code) && (
+                    <p>
+                      {[selectedOrder.shippingAddress.city, selectedOrder.shippingAddress.state, selectedOrder.shippingAddress.postal_code]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                  )}
+                  {selectedOrder.shippingAddress.country && (
+                    <p>{selectedOrder.shippingAddress.country}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-500">No shipping address recorded.</p>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                Payment
+              </h3>
+              <p className="text-gray-700">
+                Total: {formatCurrency(selectedOrder.totalCents)}
+              </p>
+              {selectedOrder.cardLast4 ? (
+                <p className="text-gray-600">
+                  Paid with {selectedOrder.cardBrand || 'card'} ending in{' '}
+                  {selectedOrder.cardLast4}
+                </p>
+              ) : (
+                <p className="text-gray-500">No card details available.</p>
+              )}
+            </div>
+
+            <div>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase mb-1">
+                Items
+              </h3>
+              {selectedOrder.items && selectedOrder.items.length > 0 ? (
+                <div className="divide-y divide-gray-200 border border-gray-200 rounded-md">
+                  {selectedOrder.items.map((item) => (
+                    <div
+                      key={item.productId + (item.productName ?? '')}
+                      className="flex items-center justify-between px-3 py-2"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {item.productName || 'Item'}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Qty: {item.quantity}
+                        </p>
+                      </div>
+                      <div className="text-sm font-semibold text-gray-900">
+                        {formatCurrency(item.priceCents * item.quantity)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No items recorded for this order.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
