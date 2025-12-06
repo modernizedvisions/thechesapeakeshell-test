@@ -1,6 +1,6 @@
 export interface Product {
   id: string;
-  stripeProductId: string;
+  stripeProductId?: string | null;
   name: string;
   slug?: string;
   description: string;
@@ -13,7 +13,7 @@ export interface Product {
   quantityAvailable?: number;
   visible: boolean;
   isSold: boolean;
-  stripePriceId?: string;
+  stripePriceId?: string | null;
   priceCents?: number;
   soldAt?: string;
 }

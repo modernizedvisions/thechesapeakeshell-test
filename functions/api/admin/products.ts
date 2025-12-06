@@ -1,3 +1,4 @@
+import Stripe from 'stripe';
 import type { Product } from '../../../src/lib/types';
 
 type D1PreparedStatement = {
@@ -29,6 +30,12 @@ type ProductRow = {
   collection?: string | null;
   created_at: string | null;
 };
+
+const createStripeClient = (secretKey: string) =>
+  new Stripe(secretKey, {
+    apiVersion: '2024-06-20',
+    httpClient: Stripe.createFetchHttpClient(),
+  });
 
 type NewProductInput = {
   name: string;
@@ -182,7 +189,7 @@ export async function onRequestGet(context: { env: { DB: D1Database }; request: 
   }
 }
 
-export async function onRequestPost(context: { env: { DB: D1Database }; request: Request }): Promise<Response> {
+export async function onRequestPost(context: { env: { DB: D1Database; STRIPE_SECRET_KEY?: string }; request: Request }): Promise<Response> {
   try {
     const body = (await context.request.json()) as Partial<NewProductInput>;
     const error = validateNewProduct(body);
@@ -229,16 +236,65 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
       throw new Error(result.error || 'Insert failed');
     }
 
-    const inserted = await context.env.DB.prepare(
+    const fetchRow = async () =>
+      context.env.DB.prepare(
+        `
+        SELECT id, name, slug, description, price_cents, category, image_url, image_urls_json,
+               is_active, is_one_off, is_sold, quantity_available, stripe_price_id, stripe_product_id,
+               collection, created_at
+        FROM products WHERE id = ?;
       `
-      SELECT id, name, slug, description, price_cents, category, image_url, image_urls_json,
-             is_active, is_one_off, is_sold, quantity_available, stripe_price_id, stripe_product_id,
-             collection, created_at
-      FROM products WHERE id = ?;
-    `
-    )
-      .bind(id)
-      .first<ProductRow>();
+      )
+        .bind(id)
+        .first<ProductRow>();
+
+    let inserted = await fetchRow();
+
+    const stripeSecret = context.env.STRIPE_SECRET_KEY;
+    if (!stripeSecret) {
+      const product = inserted ? mapRowToProduct(inserted) : null;
+      return new Response(JSON.stringify({ product, error: 'Stripe is not configured' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    try {
+      const stripe = createStripeClient(stripeSecret);
+
+      // Only create Stripe resources if missing.
+      if (!inserted?.stripe_product_id || !inserted?.stripe_price_id) {
+        const stripeProduct = await stripe.products.create({
+          name: body.name || 'Chesapeake Shell Item',
+          description: body.description || undefined,
+          metadata: {
+            d1_product_id: id,
+            d1_product_slug: slug,
+          },
+        });
+
+        const stripePrice = await stripe.prices.create({
+          product: stripeProduct.id,
+          unit_amount: body.priceCents,
+          currency: 'usd',
+        });
+
+        await context.env.DB.prepare(
+          `UPDATE products SET stripe_product_id = ?, stripe_price_id = ? WHERE id = ?;`
+        )
+          .bind(stripeProduct.id, stripePrice.id, id)
+          .run();
+
+        inserted = await fetchRow();
+      }
+    } catch (stripeError) {
+      console.error('Failed to create Stripe product/price', stripeError);
+      const product = inserted ? mapRowToProduct(inserted) : null;
+      return new Response(JSON.stringify({ product, error: 'Failed to create Stripe product and price.' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const product = inserted ? mapRowToProduct(inserted) : null;
 
