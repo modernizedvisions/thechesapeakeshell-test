@@ -151,6 +151,8 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editImages, setEditImages] = useState<ManagedImage[]>([]);
+  const [categories, setCategories] = useState<string[]>(categoryOptions);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const maxModalImages = 4;
 
   const handleModalFileSelect = (files: FileList | null) => {
@@ -252,20 +254,62 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Product Type</label>
-                  <select
-                    value={productForm.category}
-                    onChange={(e) =>
-                      onProductFormChange('category', e.target.value as ProductFormState['category'])
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                  >
-                    {categoryOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Product Categories
+                  </label>
+                  <div className="rounded-lg border border-slate-200 bg-slate-50">
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-200">
+                      <input
+                        type="text"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        placeholder="Add new category"
+                        className="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-slate-400"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const trimmed = newCategoryName.trim();
+                          if (!trimmed) return;
+                          const exists = categories.some((cat) => cat.toLowerCase() === trimmed.toLowerCase());
+                          if (!exists) {
+                            setCategories((prev) => [...prev, trimmed]);
+                            // TODO: Persist custom categories to backend when available.
+                          }
+                          onProductFormChange('category', trimmed as ProductFormState['category']);
+                          setNewCategoryName('');
+                        }}
+                        disabled={!newCategoryName.trim()}
+                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-xs font-medium transition ${
+                          newCategoryName.trim()
+                            ? 'border-emerald-500 text-emerald-600 hover:bg-emerald-50'
+                            : 'border-slate-200 text-slate-300 cursor-not-allowed'
+                        }`}
+                      >
+                        ✓
+                      </button>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto py-1">
+                      {categories.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-slate-500">No categories yet. Add one above to get started.</p>
+                      ) : (
+                        categories.map((cat) => (
+                          <label
+                            key={cat}
+                            className="flex items-center gap-2 px-3 py-1 text-sm hover:bg-slate-100 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={productForm.category === cat}
+                              onChange={() => onProductFormChange('category', cat as ProductFormState['category'])}
+                              className="h-4 w-4 rounded border-slate-300"
+                            />
+                            <span className="text-slate-800">{cat}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -279,15 +323,6 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                     onChange={(e) => onProductFormChange('quantityAvailable', Number(e.target.value))}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
                     disabled={productForm.isOneOff}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Collection (optional)</label>
-                  <input
-                    value={productForm.collection}
-                    onChange={(e) => onProductFormChange('collection', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                    placeholder="e.g. Holiday"
                   />
                 </div>
               </div>

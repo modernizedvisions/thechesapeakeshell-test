@@ -1,17 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-type AdminMessage = {
-  id?: string;
-  name?: string;
-  email?: string;
-  message?: string;
+interface AdminMessage {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
   imageUrl?: string | null;
-  createdAt?: string | null;
-};
+  createdAt: string;
+  status?: string;
+}
 
 export interface AdminMessagesTabProps {
-  messages: AdminMessage[];
   onCreateCustomOrderFromMessage: (message: {
     customerName?: string;
     customerEmail?: string;
@@ -20,9 +20,42 @@ export interface AdminMessagesTabProps {
   }) => void;
 }
 
-export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ messages, onCreateCustomOrderFromMessage }) => {
+export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCustomOrderFromMessage }) => {
+  const [messages, setMessages] = useState<AdminMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<AdminMessage | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const res = await fetch('/api/admin/messages');
+        if (!res.ok) throw new Error('Failed to load messages');
+        const json = await res.json();
+        let incoming: AdminMessage[];
+        if (Array.isArray(json)) {
+          incoming = json as AdminMessage[];
+        } else if (Array.isArray(json?.messages)) {
+          incoming = json.messages as AdminMessage[];
+        } else {
+          console.error('[AdminMessagesTab] Unexpected messages payload', json);
+          incoming = [];
+        }
+        console.log('[AdminMessagesTab] Loaded messages', incoming);
+        setMessages(incoming);
+      } catch (err) {
+        console.error('[AdminMessagesTab] Failed to load messages', err);
+        setError('Failed to load messages');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void load();
+  }, []);
 
   const sortedMessages = useMemo(
     () =>
@@ -56,6 +89,9 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ messages, on
         <h2 className="text-lg font-semibold text-gray-900">Messages</h2>
         <p className="text-sm text-gray-600">Customer messages from the contact form.</p>
       </div>
+
+      {isLoading && <div className="text-sm text-gray-500">Loading messages...</div>}
+      {error && !isLoading && <div className="text-sm text-red-600">{error}</div>}
 
       {sortedMessages.length === 0 ? (
         <div className="text-sm text-gray-500">No messages yet.</div>
