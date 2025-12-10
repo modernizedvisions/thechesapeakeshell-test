@@ -27,6 +27,11 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
   const [selectedMessage, setSelectedMessage] = useState<AdminMessage | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
+  const truncateMessage = (text: string, max = 15): string => {
+    if (!text) return '';
+    return text.length <= max ? text : text.slice(0, max) + '...';
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -102,8 +107,9 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
               <tr>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Email</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Image</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Message</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Received</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Preview</th>
                 <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
               </tr>
             </thead>
@@ -111,14 +117,27 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
               {sortedMessages.map((msg) => (
                 <tr key={msg.id || `${msg.email}-${msg.createdAt}`}>
                   <td className="px-4 py-2 text-sm text-gray-900">{msg.name || 'Unknown'}</td>
-                  <td className="px-4 py-2 text-sm text-gray-900">{msg.email || '—'}</td>
-                  <td className="px-4 py-2 text-sm text-gray-700">
-                    {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '—'}
+                  <td className="px-4 py-2 text-sm text-gray-900">{msg.email || '-'}</td>
+                  <td className="px-4 py-3">
+                    {msg.imageUrl ? (
+                      <img
+                        src={msg.imageUrl}
+                        alt={msg.name || 'Message image'}
+                        className="h-10 w-10 rounded-md border border-slate-200 object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs text-slate-400">No image</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className="block max-w-[12rem] text-sm text-slate-700">
+                      {truncateMessage(msg.message || '', 15) || '-'}
+                    </span>
                   </td>
                   <td className="px-4 py-2 text-sm text-gray-700">
-                    {(msg.message || '').length > 80 ? `${msg.message?.slice(0, 80)}…` : msg.message || '—'}
+                    {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '-'}
                   </td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="px-4 py-3 text-right">
                     <button
                       type="button"
                       className="text-sm font-medium text-gray-700 underline"
@@ -136,53 +155,68 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Message Details</DialogTitle>
-          </DialogHeader>
+          <div className="max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Message Details</DialogTitle>
+            </DialogHeader>
 
-          {selectedMessage && (
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Name</p>
-                <p className="text-sm text-gray-900">{selectedMessage.name || 'Unknown'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
-                <p className="text-sm text-gray-900">{selectedMessage.email || '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase">Message</p>
-                <p className="whitespace-pre-wrap text-sm text-gray-900">{selectedMessage.message || '—'}</p>
-              </div>
-              {selectedMessage.imageUrl && (
+            {selectedMessage && (
+              <div className="space-y-4">
                 <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Image</p>
-                  <img
-                    src={selectedMessage.imageUrl}
-                    alt="Customer upload"
-                    className="max-h-64 w-full rounded-lg object-cover border border-gray-200"
-                  />
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Name</p>
+                  <p className="text-sm text-gray-900">{selectedMessage.name || 'Unknown'}</p>
                 </div>
-              )}
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
+                  <p className="text-sm text-gray-900">{selectedMessage.email || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase">Message</p>
+                  <p className="whitespace-pre-wrap text-sm text-gray-900">{selectedMessage.message || '-'}</p>
+                </div>
+                {selectedMessage.imageUrl && (
+                  <div className="mt-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-semibold tracking-wide text-slate-500">IMAGE</span>
+                      <a
+                        href={selectedMessage.imageUrl}
+                        download
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-sky-700 hover:underline"
+                      >
+                        Download image
+                      </a>
+                    </div>
+                    <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+                      <img
+                        src={selectedMessage.imageUrl}
+                        alt={selectedMessage.name || 'Uploaded image'}
+                        className="block h-auto w-full max-h-[70vh] object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
 
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:border-gray-400"
-                  onClick={() => setIsDialogOpen(false)}
-                >
-                  Close
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-                  onClick={handleCreateOrder}
-                >
-                  Create Custom Order
-                </button>
+                <div className="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:border-gray-400"
+                    onClick={() => setIsDialogOpen(false)}
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                    onClick={handleCreateOrder}
+                  >
+                    Create Custom Order
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
