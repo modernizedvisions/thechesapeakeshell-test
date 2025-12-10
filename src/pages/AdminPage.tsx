@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle, Eye, EyeOff, Loader2, Plus, Trash2, Upload, Pencil, X } from 'lucide-react';
 import {
   fetchGalleryImages,
   fetchHomeHeroConfig,
@@ -7,16 +6,25 @@ import {
   fetchSoldProducts,
   saveGalleryImages,
   saveHomeHeroConfig,
+  fetchShopCategoryTiles,
+  saveShopCategoryTiles,
   verifyAdminPassword,
   adminFetchProducts,
   adminCreateProduct,
   adminUpdateProduct,
   adminDeleteProduct,
 } from '../lib/api';
-import { GalleryImage, HeroConfig, HeroImage, Product } from '../lib/types';
+import { CustomOrdersImage, GalleryImage, HeroCollageImage, HeroConfig, Product, ShopCategoryTile } from '../lib/types';
 import type { AdminOrder } from '../lib/db/orders';
+import { AdminOrdersTab } from '../components/admin/AdminOrdersTab';
+import { AdminSoldTab } from '../components/admin/AdminSoldTab';
+import { AdminGalleryTab } from '../components/admin/AdminGalleryTab';
+import { AdminHomeTab } from '../components/admin/AdminHomeTab';
+import { AdminMessagesTab } from '../components/admin/AdminMessagesTab';
+import { AdminShopTab } from '../components/admin/AdminShopTab';
+import { AdminCustomOrdersTab } from '../components/admin/AdminCustomOrdersTab';
 
-type ProductFormState = {
+export type ProductFormState = {
   name: string;
   description: string;
   price: string;
@@ -31,7 +39,7 @@ type ProductFormState = {
   stripeProductId?: string;
 };
 
-type ManagedImage = {
+export type ManagedImage = {
   id: string;
   url: string;
   file?: File;
@@ -68,10 +76,12 @@ export function AdminPage() {
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
-  const [heroConfig, setHeroConfig] = useState<HeroConfig>({ mainImage: null, gridImages: [] });
-  const [activeTab, setActiveTab] = useState<'orders' | 'sold' | 'gallery' | 'home' | 'shop'>('orders');
+  const [heroConfig, setHeroConfig] = useState<HeroConfig>({ heroImages: [], customOrdersImages: [] });
+  const [activeTab, setActiveTab] = useState<'orders' | 'sold' | 'gallery' | 'home' | 'shop' | 'messages' | 'customOrders'>('orders');
   const [gallerySaveState, setGallerySaveState] = useState<'idle' | 'saving' | 'success'>('idle');
   const [homeSaveState, setHomeSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [shopCategoryTiles, setShopCategoryTiles] = useState<ShopCategoryTile[]>([]);
+  const [categoryTilesSaveState, setCategoryTilesSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
   const [productSaveState, setProductSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [productMessage, setProductMessage] = useState<string>('');
   const [productForm, setProductForm] = useState<ProductFormState>(initialProductForm);
@@ -80,10 +90,16 @@ export function AdminPage() {
   const [productImages, setProductImages] = useState<ManagedImage[]>([]);
   const [editProductImages, setEditProductImages] = useState<ManagedImage[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const heroGridFileInputRef = useRef<HTMLInputElement | null>(null);
-  const heroMainFileInputRef = useRef<HTMLInputElement | null>(null);
   const productImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const editProductImageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const categoryTileFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [activeTileId, setActiveTileId] = useState<string | null>(null);
+  const [productSearch, setProductSearch] = useState('');
+  const [productFilterCategory, setProductFilterCategory] = useState<'All' | ProductFormState['category']>('All');
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [messages] = useState<any[]>([]);
+  const [customOrders, setCustomOrders] = useState<any[]>([]);
+  const [customOrderDraft, setCustomOrderDraft] = useState<any>(null);
 
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -108,12 +124,24 @@ export function AdminPage() {
     }).format(amount);
   };
 
+  const filteredProductsList = useMemo(() => {
+    const term = productSearch.trim().toLowerCase();
+    return adminProducts.filter((p) => {
+      const matchesSearch =
+        !term ||
+        p.name.toLowerCase().includes(term) ||
+        (p.description || '').toLowerCase().includes(term);
+      const matchesCategory = productFilterCategory === 'All' || p.type === productFilterCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [adminProducts, productSearch, productFilterCategory]);
+
   const handleSaveHeroConfig = async () => {
     setHomeSaveState('saving');
     try {
       const configToSave: HeroConfig = {
-        mainImage: heroConfig.mainImage || null,
-        gridImages: (heroConfig.gridImages || []).slice(0, 6),
+        heroImages: (heroConfig.heroImages || []).slice(0, 3),
+        customOrdersImages: (heroConfig.customOrdersImages || []).slice(0, 4),
       };
       await saveHomeHeroConfig(configToSave);
       setHomeSaveState('success');
@@ -154,19 +182,21 @@ export function AdminPage() {
   };
 
   const loadAdminData = async () => {
-    const [ordersData, soldData, galleryData, heroData] = await Promise.all([
+    const [ordersData, soldData, galleryData, heroData, categoryTiles] = await Promise.all([
       fetchOrders(),
       fetchSoldProducts(),
       fetchGalleryImages(),
       fetchHomeHeroConfig(),
+      fetchShopCategoryTiles(),
     ]);
     setOrders(ordersData);
     setSoldProducts(soldData);
     setGalleryImages(galleryData);
     setHeroConfig({
-      mainImage: heroData.mainImage || null,
-      gridImages: (heroData.gridImages || []).slice(0, 6),
+      heroImages: (heroData.heroImages || []).slice(0, 3),
+      customOrdersImages: (heroData.customOrdersImages || []).slice(0, 4),
     });
+    setShopCategoryTiles(categoryTiles);
     await loadAdminProducts();
   };
 
@@ -202,16 +232,44 @@ export function AdminPage() {
     setProductImages([]);
   };
 
+  const handleTileImageSelect = (file: File, tileId: string) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setShopCategoryTiles((prev) =>
+          prev.map((tile) => (tile.id === tileId ? { ...tile, imageUrl: reader.result as string } : tile))
+        );
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveCategoryTiles = async () => {
+    setCategoryTilesSaveState('saving');
+    try {
+      await saveShopCategoryTiles(shopCategoryTiles);
+      setCategoryTilesSaveState('success');
+      setTimeout(() => setCategoryTilesSaveState('idle'), 1500);
+    } catch (err) {
+      console.error('Failed to save category tiles', err);
+      setCategoryTilesSaveState('idle');
+    }
+  };
+
   const addImages = (files: FileList | null, setImages: React.Dispatch<React.SetStateAction<ManagedImage[]>>) => {
     if (!files) return;
-    const newEntries: ManagedImage[] = Array.from(files).map((file) => ({
-      id: crypto.randomUUID(),
-      url: URL.createObjectURL(file),
-      file,
-      isPrimary: false,
-      isNew: true,
-    }));
+    const incoming = Array.from(files);
     setImages((prev) => {
+      const remaining = Math.max(0, 4 - prev.length);
+      if (remaining === 0) return prev;
+      const selected = incoming.slice(0, remaining);
+      const newEntries: ManagedImage[] = selected.map((file) => ({
+        id: crypto.randomUUID(),
+        url: URL.createObjectURL(file),
+        file,
+        isPrimary: false,
+        isNew: true,
+      }));
       const combined = [...prev, ...newEntries];
       if (!combined.some((img) => img.isPrimary) && combined.length > 0) {
         combined[0].isPrimary = true;
@@ -263,19 +321,19 @@ export function AdminPage() {
   };
 
   const uploadImage = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const response = await fetch('/api/admin/upload-image', {
-      method: 'POST',
-      body: formData,
+    // TODO: In future, move from base64 data URLs to real storage (e.g., R2) and restore a real upload endpoint.
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Failed to read image as data URL'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
     });
-    if (!response.ok) {
-      throw new Error(`Upload failed with status ${response.status}`);
-    }
-    const data = await response.json();
-    if (data.url) return data.url as string;
-    if (Array.isArray(data.urls) && data.urls.length > 0) return data.urls[0] as string;
-    throw new Error('Upload response missing url');
   };
 
   const resolveImageUrls = async (images: ManagedImage[]): Promise<{ imageUrl: string; imageUrls: string[] }> => {
@@ -503,116 +561,42 @@ export function AdminPage() {
             >
               Shop
             </button>
+            <button
+              onClick={() => setActiveTab('messages')}
+              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                activeTab === 'messages'
+                  ? 'border-gray-900 text-gray-900'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Messages
+            </button>
+            <button
+              onClick={() => setActiveTab('customOrders')}
+              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                activeTab === 'customOrders'
+                  ? 'border-gray-900 text-gray-900'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Custom Orders
+            </button>
           </nav>
         </div>
 
         {activeTab === 'orders' && (
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3 px-6 pt-6">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by order ID, customer, or product..."
-                className="w-full sm:max-w-md border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
-              />
-            </div>
-            {filteredOrders.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No orders yet</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Customer
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Items
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Total
-                      </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredOrders.map((order) => (
-                      <tr key={order.id}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(order.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          <div>{order.shippingName || order.customerName || 'Customer'}</div>
-                          <div className="text-gray-500">{order.customerEmail || 'No email'}</div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {order.items?.length || 0} items
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ${(order.totalCents / 100).toFixed(2)}
-                        </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedOrder(order)}
-                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
-                          >
-                            View
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <AdminOrdersTab
+            searchQuery={searchQuery}
+            filteredOrders={filteredOrders}
+            onSearchChange={setSearchQuery}
+            onSelectOrder={setSelectedOrder}
+          />
         )}
 
-        {activeTab === 'sold' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {soldProducts.length === 0 ? (
-              <div className="col-span-full text-center text-gray-500 py-12">
-                No sold products yet
-              </div>
-            ) : (
-              soldProducts.map((product) => (
-                <div key={product.id} className="bg-white rounded-lg overflow-hidden shadow-sm">
-                  <div className="aspect-square bg-gray-100">
-                    {product.imageUrl ? (
-                      <img
-                        src={product.imageUrl}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-400">
-                        No image
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-medium text-gray-900 mb-1">{product.name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {product.soldAt
-                        ? `Sold on ${new Date(product.soldAt).toLocaleDateString()}`
-                        : 'Sold'}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
+        {activeTab === 'sold' && <AdminSoldTab soldProducts={soldProducts} />}
 
         {activeTab === 'gallery' && (
-          <GalleryAdmin
+          <AdminGalleryTab
             images={galleryImages}
             onChange={setGalleryImages}
             onSave={async () => {
@@ -634,446 +618,72 @@ export function AdminPage() {
         )}
 
         {activeTab === 'home' && (
-          <div className="space-y-6">
-            <MainHeroAdmin
-              image={heroConfig.mainImage || null}
-              onChange={(img) => setHeroConfig((prev) => ({ ...prev, mainImage: img }))}
-              fileInputRef={heroMainFileInputRef}
-              onSave={handleSaveHeroConfig}
-              saveState={homeSaveState}
-            />
-
-            <GalleryAdmin
-              images={heroConfig.gridImages}
-              onChange={(imgs) => setHeroConfig((prev) => ({ ...prev, gridImages: imgs }))}
-              onSave={handleSaveHeroConfig}
-              saveState={homeSaveState}
-              fileInputRef={heroGridFileInputRef}
-              title="Hero Grid Images"
-              description="Up to 6 images shown under the main hero."
-              maxImages={6}
-            />
-          </div>
+          <AdminHomeTab
+            heroImages={heroConfig.heroImages || []}
+            customOrdersImages={heroConfig.customOrdersImages || []}
+            onHeroChange={(images) => setHeroConfig((prev) => ({ ...prev, heroImages: images }))}
+            onCustomOrdersChange={(images) => setHeroConfig((prev) => ({ ...prev, customOrdersImages: images }))}
+            onSaveHeroConfig={handleSaveHeroConfig}
+            homeSaveState={homeSaveState}
+            shopCategoryTiles={shopCategoryTiles}
+            categoryTilesSaveState={categoryTilesSaveState}
+            onSaveCategoryTiles={handleSaveCategoryTiles}
+            onTileImageSelect={handleTileImageSelect}
+            categoryTileFileInputRef={categoryTileFileInputRef}
+            onSelectTileId={setActiveTileId}
+            activeTileId={activeTileId}
+          />
         )}
 
         {activeTab === 'shop' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">Shop / Products</h2>
-                  <p className="text-sm text-gray-600">Add, edit, and manage all products shown in the storefront.</p>
-                </div>
-              </div>
+          <AdminShopTab
+            productMessage={productMessage}
+            productForm={productForm}
+            productImages={productImages}
+            editProductImages={editProductImages}
+            adminProducts={adminProducts}
+            editProductId={editProductId}
+            editProductForm={editProductForm}
+            productSaveState={productSaveState}
+            isLoadingProducts={isLoadingProducts}
+            categoryOptions={CATEGORY_OPTIONS}
+            productImageFileInputRef={productImageFileInputRef}
+            editProductImageFileInputRef={editProductImageFileInputRef}
+            onCreateProduct={handleCreateProduct}
+            onProductFormChange={handleProductFormChange}
+            onResetProductForm={resetProductForm}
+            onAddProductImages={(files) => addImages(files, setProductImages)}
+            onSetPrimaryProductImage={(id) => setPrimaryImage(id, setProductImages)}
+            onRemoveProductImage={(id) => removeImage(id, setProductImages)}
+            onAddEditProductImages={(files) => addImages(files, setEditProductImages)}
+            onSetPrimaryEditImage={(id) => setPrimaryImage(id, setEditProductImages)}
+            onMoveEditImage={(id, dir) => moveImage(id, dir, setEditProductImages)}
+            onRemoveEditImage={(id) => removeImage(id, setEditProductImages)}
+            onEditFormChange={handleEditFormChange}
+            onUpdateProduct={handleUpdateProduct}
+            onCancelEditProduct={cancelEditProduct}
+            onStartEditProduct={startEditProduct}
+            onDeleteProduct={handleDeleteProduct}
+          />
+        )}
 
-              {productMessage && (
-                <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
-                  {productMessage}
-                </div>
-              )}
+        {activeTab === 'messages' && (
+          <AdminMessagesTab
+            messages={messages}
+            onCreateCustomOrderFromMessage={(draft) => {
+              setCustomOrderDraft(draft);
+              setActiveTab('customOrders');
+            }}
+          />
+        )}
 
-              <form onSubmit={handleCreateProduct} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                    <input
-                      required
-                      value={productForm.name}
-                      onChange={(e) => handleProductFormChange('name', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                    <select
-                      value={productForm.category}
-                      onChange={(e) => handleProductFormChange('category', e.target.value as ProductFormState['category'])}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                    >
-                      {CATEGORY_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  <textarea
-                    required
-                    value={productForm.description}
-                    onChange={(e) => handleProductFormChange('description', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Price (USD)</label>
-                    <input
-                      required
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={productForm.price}
-                      onChange={(e) => handleProductFormChange('price', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Available</label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={productForm.quantityAvailable}
-                      onChange={(e) => handleProductFormChange('quantityAvailable', Number(e.target.value))}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                      disabled={productForm.isOneOff}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Collection (optional)</label>
-                    <input
-                      value={productForm.collection}
-                      onChange={(e) => handleProductFormChange('collection', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                      placeholder="e.g., New Arrivals"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-sm font-medium text-gray-700">Product Images</label>
-                      <button
-                        type="button"
-                        onClick={() => productImageFileInputRef.current?.click()}
-                        className="text-sm text-gray-700 underline"
-                      >
-                        Upload images
-                      </button>
-                    </div>
-                    <input
-                      ref={productImageFileInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        addImages(e.target.files, setProductImages);
-                        if (productImageFileInputRef.current) productImageFileInputRef.current.value = '';
-                      }}
-                    />
-                    <ManagedImagesList
-                      images={productImages}
-                      onSetPrimary={(id) => setPrimaryImage(id, setProductImages)}
-                      onMove={(id, dir) => moveImage(id, dir, setProductImages)}
-                      onRemove={(id) => removeImage(id, setProductImages)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">Image URLs (optional fallback)</label>
-                    <textarea
-                      value={productForm.imageUrls}
-                      onChange={(e) => handleProductFormChange('imageUrls', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                      rows={4}
-                      placeholder="Provide URLs if not uploading. Primary = first entry."
-                    />
-                    <input
-                      value={productForm.imageUrl}
-                      onChange={(e) => handleProductFormChange('imageUrl', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                      placeholder="Primary image URL (optional)"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={productForm.isOneOff}
-                      onChange={(e) => handleProductFormChange('isOneOff', e.target.checked)}
-                      className="h-4 w-4 text-gray-900 border-gray-300 rounded"
-                    />
-                    One-off piece
-                  </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={productForm.isActive}
-                      onChange={(e) => handleProductFormChange('isActive', e.target.checked)}
-                      className="h-4 w-4 text-gray-900 border-gray-300 rounded"
-                    />
-                    Active (visible)
-                  </label>
-                  <div className="text-xs text-gray-500 self-center">
-                    Price is stored in cents. Stripe IDs are auto-generated and read-only.
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Stripe Price ID (auto)</label>
-                    <input
-                      value={productForm.stripePriceId}
-                      readOnly
-                      disabled
-                      className="w-full px-4 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm"
-                      placeholder="Auto-generated by Stripe"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Stripe Product ID (auto)</label>
-                    <input
-                      value={productForm.stripeProductId}
-                      readOnly
-                      disabled
-                      className="w-full px-4 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm"
-                      placeholder="Auto-generated by Stripe"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    disabled={productSaveState === 'saving'}
-                    className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
-                  >
-                    {productSaveState === 'saving' ? (
-                      <span className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-gray-200" />
-                        <span>Saving...</span>
-                      </span>
-                    ) : (
-                      'Add Product'
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetProductForm}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:border-gray-400"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </form>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between p-6 pb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Current Products</h3>
-                  <p className="text-sm text-gray-600">Edit or remove items already in the storefront.</p>
-                </div>
-                {isLoadingProducts && (
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading...
-                  </div>
-                )}
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Qty</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">One-off</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Active</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {adminProducts.map((product) => {
-                      const isEditing = editProductId === product.id && editProductForm;
-                      return (
-                        <tr key={product.id}>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {isEditing ? (
-                              <input
-                                value={editProductForm?.name || ''}
-                                onChange={(e) => handleEditFormChange('name', e.target.value)}
-                                className="w-full px-2 py-1 border border-gray-300 rounded"
-                              />
-                            ) : (
-                              <div>
-                                <div className="font-medium">{product.name}</div>
-                                <div className="text-xs text-gray-500">{product.collection || '—'}</div>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {isEditing ? (
-                              <select
-                                value={editProductForm?.category}
-                                onChange={(e) =>
-                                  handleEditFormChange('category', e.target.value as ProductFormState['category'])
-                                }
-                                className="w-full px-2 py-1 border border-gray-300 rounded"
-                              >
-                                {CATEGORY_OPTIONS.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              product.type
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {isEditing ? (
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={editProductForm?.price}
-                                onChange={(e) => handleEditFormChange('price', e.target.value)}
-                                className="w-full px-2 py-1 border border-gray-300 rounded"
-                              />
-                            ) : (
-                              formatPriceDisplay(product.priceCents)
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {isEditing ? (
-                              <input
-                                type="number"
-                                min="1"
-                                value={editProductForm?.quantityAvailable || 1}
-                                onChange={(e) => handleEditFormChange('quantityAvailable', Number(e.target.value))}
-                                className="w-20 px-2 py-1 border border-gray-300 rounded"
-                                disabled={editProductForm?.isOneOff}
-                              />
-                            ) : (
-                              product.quantityAvailable ?? 1
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {isEditing ? (
-                              <input
-                                type="checkbox"
-                                checked={!!editProductForm?.isOneOff}
-                                onChange={(e) => handleEditFormChange('isOneOff', e.target.checked)}
-                                className="h-4 w-4 text-gray-900 border-gray-300 rounded"
-                              />
-                            ) : (
-                              <span
-                                className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                  product.oneoff ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
-                                }`}
-                              >
-                                {product.oneoff ? 'One-off' : 'Multi'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
-                            {isEditing ? (
-                              <input
-                                type="checkbox"
-                                checked={!!editProductForm?.isActive}
-                                onChange={(e) => handleEditFormChange('isActive', e.target.checked)}
-                                className="h-4 w-4 text-gray-900 border-gray-300 rounded"
-                              />
-                            ) : (
-                              <span
-                                className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                  product.visible ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                                }`}
-                              >
-                                {product.visible ? 'Active' : 'Hidden'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-900 space-x-2">
-                            {isEditing ? (
-                              <>
-                                <button
-                                  onClick={handleUpdateProduct}
-                                  className="inline-flex items-center gap-1 px-3 py-1 bg-gray-900 text-white rounded hover:bg-gray-800"
-                                >
-                                  <CheckCircle className="w-4 h-4" /> Save
-                                </button>
-                                <button
-                                  onClick={cancelEditProduct}
-                                  className="inline-flex items-center gap-1 px-3 py-1 border border-gray-300 rounded hover:border-gray-400 text-gray-700"
-                                >
-                                  <X className="w-4 h-4" /> Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => startEditProduct(product)}
-                                  className="inline-flex items-center gap-1 px-3 py-1 border border-gray-300 rounded hover:border-gray-400 text-gray-700"
-                                >
-                                  <Pencil className="w-4 h-4" /> Edit
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteProduct(product.id)}
-                                  className="inline-flex items-center gap-1 px-3 py-1 text-red-600 hover:text-red-700"
-                                >
-                                  <Trash2 className="w-4 h-4" /> Delete
-                                </button>
-                              </>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                {adminProducts.length === 0 && !isLoadingProducts && (
-                  <div className="p-6 text-center text-gray-500">No products yet</div>
-                )}
-              </div>
-            </div>
-
-            {editProductId && (
-              <div className="bg-white rounded-lg shadow-sm border border-dashed border-gray-200 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-900">Edit Images</h4>
-                    <p className="text-xs text-gray-600">Upload, reorder, and set a primary image.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => editProductImageFileInputRef.current?.click()}
-                    className="text-sm text-gray-700 underline"
-                  >
-                    Upload images
-                  </button>
-                  <input
-                    ref={editProductImageFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      addImages(e.target.files, setEditProductImages);
-                      if (editProductImageFileInputRef.current) editProductImageFileInputRef.current.value = '';
-                    }}
-                  />
-                </div>
-                <ManagedImagesList
-                  images={editProductImages}
-                  onSetPrimary={(id) => setPrimaryImage(id, setEditProductImages)}
-                  onMove={(id, dir) => moveImage(id, dir, setEditProductImages)}
-                  onRemove={(id) => removeImage(id, setEditProductImages)}
-                />
-              </div>
-            )}
-          </div>
+        {activeTab === 'customOrders' && (
+          <AdminCustomOrdersTab
+            allCustomOrders={customOrders}
+            onCreateOrder={(order) => setCustomOrders((prev) => [...prev, { id: crypto.randomUUID(), ...order }])}
+            initialDraft={customOrderDraft}
+            onDraftConsumed={() => setCustomOrderDraft(null)}
+          />
         )}
       </div>
     </div>
@@ -1195,267 +805,6 @@ export function AdminPage() {
   );
 }
 
-interface MainHeroAdminProps {
-  image: HeroImage | null;
-  onChange: (image: HeroImage | null) => void;
-  fileInputRef: React.RefObject<HTMLInputElement>;
-  onSave: () => Promise<void>;
-  saveState: 'idle' | 'saving' | 'success';
-}
-
-function MainHeroAdmin({ image, onChange, fileInputRef, onSave, saveState }: MainHeroAdminProps) {
-  const handleFileSelect = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      onChange({
-        id: crypto.randomUUID(),
-        imageUrl: dataUrl,
-        hidden: false,
-        createdAt: new Date().toISOString(),
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
-    }
-  };
-
-  return (
-    <div
-      className="bg-white rounded-lg shadow-sm p-4 border border-gray-200"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={handleDrop}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Main Hero Image</h2>
-          <p className="text-sm text-gray-600">Shown as the large image at the top of the hero.</p>
-        </div>
-        <div className="flex gap-2 items-center">
-          <button
-            onClick={onSave}
-            disabled={saveState === 'saving'}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
-          >
-            {saveState === 'saving' ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-200" />
-                <span>Saving...</span>
-              </span>
-            ) : saveState === 'success' ? (
-              <span className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-200" />
-                <span>Saved</span>
-              </span>
-            ) : (
-              'Save'
-            )}
-          </button>
-          {image && (
-            <button
-              onClick={() => onChange(null)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:border-gray-400"
-            >
-              Remove
-            </button>
-          )}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            Replace
-          </button>
-        </div>
-      </div>
-
-      <div className="aspect-video bg-gray-100 border border-dashed border-gray-300 rounded-lg overflow-hidden flex items-center justify-center">
-        {image ? (
-          <img src={image.imageUrl} alt="Main hero" className="w-full h-full object-cover" />
-        ) : (
-          <div className="flex flex-col items-center text-gray-500">
-            <Plus className="w-8 h-8 mb-2" />
-            <span className="text-sm">Drop or upload a main hero image</span>
-          </div>
-        )}
-      </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFileSelect(file);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-        }}
-      />
-    </div>
-  );
-}
-
-interface GalleryAdminProps {
-  images: GalleryImage[];
-  onChange: (images: GalleryImage[]) => void;
-  onSave: () => Promise<void>;
-  saveState: 'idle' | 'saving' | 'success';
-  fileInputRef: React.RefObject<HTMLInputElement>;
-  title?: string;
-  description?: string;
-  maxImages?: number;
-}
-
-function GalleryAdmin({
-  images,
-  onChange,
-  onSave,
-  saveState,
-  fileInputRef,
-  title = 'Gallery Management',
-  description = 'Add, hide, or remove manual gallery images.',
-  maxImages,
-}: GalleryAdminProps) {
-  const visibleImages = useMemo(() => images, [images]);
-  const reachedLimit = maxImages !== undefined && visibleImages.length >= maxImages;
-
-  const handleToggleHidden = (id: string) => {
-    onChange(
-      visibleImages.map((img) =>
-        img.id === id ? { ...img, hidden: !img.hidden } : img
-      )
-    );
-  };
-
-  const handleDelete = (id: string) => {
-    onChange(visibleImages.filter((img) => img.id !== id));
-  };
-
-  const handleAdd = (url: string) => {
-    if (reachedLimit) return;
-    const newImage: GalleryImage = {
-      id: crypto.randomUUID(),
-      imageUrl: url,
-      hidden: false,
-      createdAt: new Date().toISOString(),
-    };
-    onChange([newImage, ...visibleImages]);
-  };
-
-  const handleFileSelect = async (file: File) => {
-    if (reachedLimit) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      handleAdd(dataUrl);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (reachedLimit) return;
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
-    }
-  };
-
-  return (
-    <div
-      className="bg-white rounded-lg shadow-sm p-4 border border-gray-200"
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={handleDrop}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
-          <p className="text-sm text-gray-600">{description}</p>
-          {reachedLimit && (
-            <p className="text-xs text-gray-500 mt-1">Maximum of {maxImages} images reached.</p>
-          )}
-        </div>
-        <button
-          onClick={onSave}
-          disabled={saveState === 'saving'}
-          className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
-        >
-          {saveState === 'saving' ? (
-            <span className="flex items-center gap-2">
-              <Loader2 className="w-4 h-4 animate-spin text-gray-200" />
-              <span>Saving...</span>
-            </span>
-          ) : saveState === 'success' ? (
-            <span className="flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-200" />
-              <span>Saved</span>
-            </span>
-          ) : (
-            'Save'
-          )}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-        <button
-          onClick={() => !reachedLimit && fileInputRef.current?.click()}
-          disabled={reachedLimit}
-          className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Plus className="w-6 h-6 mb-1" />
-          <span className="text-sm">Add Image</span>
-          <Upload className="w-4 h-4 mt-1" />
-        </button>
-
-        {visibleImages.map((img) => (
-          <div key={img.id} className="relative">
-            <div className="aspect-square rounded-lg overflow-hidden border border-gray-200">
-              <img src={img.imageUrl} alt={img.title || 'Gallery'} className="w-full h-full object-cover" />
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <button
-                onClick={() => handleToggleHidden(img.id)}
-                className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900"
-              >
-                {img.hidden ? (
-                  <>
-                    <EyeOff className="w-4 h-4" /> Hidden
-                  </>
-                ) : (
-                  <>
-                    <Eye className="w-4 h-4" /> Visible
-                  </>
-                )}
-              </button>
-              <button
-                onClick={() => handleDelete(img.id)}
-                className="text-red-600 hover:text-red-700"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) handleFileSelect(file);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-        }}
-      />
-    </div>
-  );
-}
-
 function productToFormState(product: Product): ProductFormState {
   return {
     name: product.name,
@@ -1526,73 +875,3 @@ function mergeImages(
   return { imageUrl, imageUrls: merged };
 }
 
-function formatPriceDisplay(priceCents?: number) {
-  if (priceCents === undefined || priceCents === null) return '$0.00';
-  return `$${(priceCents / 100).toFixed(2)}`;
-}
-
-function ManagedImagesList({
-  images,
-  onSetPrimary,
-  onMove,
-  onRemove,
-}: {
-  images: ManagedImage[];
-  onSetPrimary: (id: string) => void;
-  onMove: (id: string, direction: 'up' | 'down') => void;
-  onRemove: (id: string) => void;
-}) {
-  if (!images.length) {
-    return <div className="text-sm text-gray-500 border border-gray-200 rounded-lg p-3">No images yet. Upload to add.</div>;
-  }
-
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-      {images.map((img, idx) => (
-        <div key={img.id} className="border border-gray-200 rounded-lg overflow-hidden">
-          <div className="aspect-square bg-gray-100 overflow-hidden">
-            <img src={img.url} alt={`upload-${idx}`} className="w-full h-full object-cover" />
-          </div>
-          <div className="p-2 space-y-1">
-            <div className="flex items-center justify-between text-xs text-gray-600">
-              <span>{img.isPrimary ? 'Primary' : 'Additional'}</span>
-              <span>{img.isNew ? 'New' : 'Saved'}</span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => onSetPrimary(img.id)}
-                className="flex-1 text-xs px-2 py-1 border border-gray-300 rounded hover:border-gray-400"
-              >
-                Set primary
-              </button>
-              <button
-                type="button"
-                onClick={() => onRemove(img.id)}
-                className="text-xs text-red-600 hover:text-red-700"
-              >
-                Remove
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => onMove(img.id, 'up')}
-                className="flex-1 text-xs px-2 py-1 border border-gray-300 rounded hover:border-gray-400"
-              >
-                Up
-              </button>
-              <button
-                type="button"
-                onClick={() => onMove(img.id, 'down')}
-                className="flex-1 text-xs px-2 py-1 border border-gray-300 rounded hover:border-gray-400"
-              >
-                Down
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}

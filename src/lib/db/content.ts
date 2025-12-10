@@ -1,10 +1,13 @@
-import type { GalleryImage, HeroConfig } from '../types';
+import type { CustomOrdersImage, GalleryImage, HeroConfig, HeroCollageImage } from '../types';
 import {
   GALLERY_STORAGE_KEY,
   HOME_HERO_STORAGE_KEY,
+  SHOP_CATEGORY_TILES_STORAGE_KEY,
   defaultGalleryImages,
   defaultHomeHeroConfig,
+  defaultShopCategoryTiles,
 } from './mockData';
+import type { ShopCategoryTile } from '../types';
 
 // TODO: Swap localStorage for Cloudflare D1 tables exposed via Workers.
 
@@ -24,36 +27,104 @@ export async function saveGalleryImages(images: GalleryImage[]): Promise<void> {
   localStorage.setItem(GALLERY_STORAGE_KEY, JSON.stringify(images));
 }
 
+const normalizeHeroImage = (
+  image: Partial<HeroCollageImage> | undefined,
+  fallbackAlt?: string
+): HeroCollageImage | null => {
+  if (!image?.imageUrl) return null;
+  return {
+    id: image.id || crypto.randomUUID?.() || `hero-${Date.now()}`,
+    imageUrl: image.imageUrl,
+    alt: image.alt || fallbackAlt,
+  };
+};
+
 export async function getHomeHeroConfig(): Promise<HeroConfig> {
   try {
     const stored = localStorage.getItem(HOME_HERO_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
 
-      // Backward compatibility: previously stored as an array of images.
+      // Legacy array payload: treat as heroImages
       if (Array.isArray(parsed)) {
-        return {
-          mainImage: parsed[0] ? parsed[0] : null,
-          gridImages: parsed.slice(0, 6),
-        };
+        const heroImages = parsed
+          .slice(0, 3)
+          .map((img: Partial<HeroCollageImage>) => normalizeHeroImage(img))
+          .filter(Boolean) as HeroCollageImage[];
+        return { heroImages };
+      }
+
+      // Legacy object with main + grid images
+      if (parsed?.mainImage || parsed?.gridImages) {
+        const heroImages: HeroCollageImage[] = [];
+        const legacyMain = normalizeHeroImage(parsed.mainImage, 'Featured hero image');
+        if (legacyMain) heroImages.push(legacyMain);
+        if (Array.isArray(parsed.gridImages)) {
+          parsed.gridImages.slice(0, 2).forEach((img: Partial<HeroCollageImage>) => {
+            const normalized = normalizeHeroImage(img);
+            if (normalized) heroImages.push(normalized);
+          });
+        }
+        return { heroImages };
       }
 
       const config = parsed as HeroConfig;
       return {
-        mainImage: config.mainImage || null,
-        gridImages: Array.isArray(config.gridImages) ? config.gridImages.slice(0, 6) : [],
+        heroImages: Array.isArray(config.heroImages) ? config.heroImages.slice(0, 3) : [],
+        customOrdersImages: Array.isArray(config.customOrdersImages)
+          ? config.customOrdersImages.slice(0, 4)
+          : [],
       };
     }
   } catch (err) {
     console.warn('Home hero storage read failed, using defaults.', err);
   }
-  return defaultHomeHeroConfig;
+  return {
+    heroImages: defaultHomeHeroConfig.heroImages.slice(0, 3),
+    customOrdersImages: (defaultHomeHeroConfig.customOrdersImages || []).slice(0, 4),
+  };
 }
 
 export async function saveHomeHeroConfig(config: HeroConfig): Promise<void> {
+  const safeImages = (config.heroImages || [])
+    .filter((img) => !!img?.imageUrl)
+    .slice(0, 3)
+    .map((img, index) => ({
+      id: img.id || `hero-${index}-${crypto.randomUUID?.() || Date.now()}`,
+      imageUrl: img.imageUrl,
+      alt: img.alt,
+    }));
+
+  const safeCustomOrders: CustomOrdersImage[] = (config.customOrdersImages || [])
+    .filter((img) => !!img?.imageUrl)
+    .slice(0, 4)
+    .map((img) => ({
+      imageUrl: img.imageUrl,
+      alt: img.alt,
+    }));
+
   const safeConfig: HeroConfig = {
-    mainImage: config.mainImage || null,
-    gridImages: (config.gridImages || []).slice(0, 6),
+    heroImages: safeImages,
+    customOrdersImages: safeCustomOrders,
   };
   localStorage.setItem(HOME_HERO_STORAGE_KEY, JSON.stringify(safeConfig));
+}
+
+export function fetchShopCategoryTiles(): ShopCategoryTile[] {
+  try {
+    const stored = localStorage.getItem(SHOP_CATEGORY_TILES_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed as ShopCategoryTile[];
+      }
+    }
+  } catch (err) {
+    console.warn('Shop category tiles storage read failed, using defaults.', err);
+  }
+  return defaultShopCategoryTiles;
+}
+
+export async function saveShopCategoryTiles(tiles: ShopCategoryTile[]): Promise<void> {
+  localStorage.setItem(SHOP_CATEGORY_TILES_STORAGE_KEY, JSON.stringify(tiles));
 }

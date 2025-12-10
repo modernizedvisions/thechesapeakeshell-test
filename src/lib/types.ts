@@ -62,13 +62,31 @@ export interface GalleryImage {
   createdAt?: string;
 }
 
-// Reuse gallery image shape for home hero assets so admin tooling can share behavior.
-export interface HeroImage extends GalleryImage {}
+// Collage images for the homepage hero
+export interface HeroCollageImage {
+  id: string;
+  imageUrl: string;
+  alt?: string;
+  createdAt?: string;
+}
+
+export interface CustomOrdersImage {
+  imageUrl: string;
+  alt?: string;
+}
 
 export interface HeroConfig {
-  mainImage?: HeroImage | null;
-  gridImages: HeroImage[]; // capped at 6 in UI
+  heroImages: HeroCollageImage[]; // up to 3
+  customOrdersImages?: CustomOrdersImage[]; // up to 4 for custom shells grid
 }
+
+export type ShopCategoryTile = {
+  id: string;
+  label: string;
+  ctaLabel: string;
+  categorySlug: string;
+  imageUrl: string;
+};
 
 export interface Review {
   id: string;

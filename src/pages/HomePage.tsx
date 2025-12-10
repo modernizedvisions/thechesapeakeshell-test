@@ -1,102 +1,147 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { fetchHomeHeroConfig, fetchProducts } from '../lib/api';
-import { HeroConfig, Product } from '../lib/types';
-import { useCartStore } from '../store/cartStore';
-import { useUIStore } from '../store/uiStore';
-import { SocialSection } from '../components/SocialSection';
+import { useEffect, useState } from 'react';
+import { fetchHomeHeroConfig, fetchShopCategoryTiles } from '../lib/api';
+import { CustomOrdersImage, HeroCollageImage, ShopCategoryTile } from '../lib/types';
 import { ContactForm } from '../components/ContactForm';
-import HeroShowcase from '../components/HeroShowcase';
-import HeroGalleryStrip from '../components/HeroGalleryStrip';
-import HomeCategoryCard from '../components/HomeCategoryCard';
+import { Link } from 'react-router-dom';
+import HomeHero from '../components/HomeHero';
 
-const normalizeType = (value: string) => value.toLowerCase().replace(/\s+/g, '-');
+function TikTokProfileCard() {
+  return (
+    <a
+      href="https://www.tiktok.com/@thechesapeakeshell"
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center justify-between gap-3 rounded-2xl bg-black px-4 py-3 md:px-5 md:py-3.5 shadow-md hover:shadow-lg hover:opacity-95 transition"
+    >
+      <div className="flex items-center gap-3">
+        <div className="relative h-8 w-8 rounded-full overflow-hidden bg-slate-800">
+          <img
+            src="/images/logo-circle.png"
+            alt="The Chesapeake Shell"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+        <div className="flex flex-col leading-tight text-left">
+          <span className="text-sm font-semibold text-white">TheChesapeakeShell</span>
+          <span className="text-xs text-slate-300">@thechesapeakeshell</span>
+        </div>
+      </div>
+      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10">
+        <span className="text-white text-base">♪</span>
+      </div>
+    </a>
+  );
+}
 
-const CATEGORY_CONFIG = [
-  { label: 'Ornaments', type: 'Ornaments', cta: 'All Ornaments ->', query: normalizeType('Ornaments') },
-  { label: 'Jewelry Dishes', type: 'Ring Dish', cta: 'All Jewelry Dishes ->', query: normalizeType('Ring Dish') },
-  { label: 'Decor', type: 'Decor', cta: 'All Decor ->', query: normalizeType('Decor') },
-  { label: 'Wine Stoppers', type: 'Wine Stopper', cta: 'All Wine Stoppers ->', query: normalizeType('Wine Stopper') },
-] as const;
+function InstagramProfileCard() {
+  return (
+    <a
+      href="https://www.instagram.com/thechesapeakeshell"
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 md:px-5 md:py-3.5 shadow-md border border-slate-200 hover:shadow-lg hover:bg-slate-50 transition"
+    >
+      <div className="flex items-center gap-3">
+        <div className="relative h-8 w-8 rounded-full overflow-hidden bg-slate-200">
+          <img
+            src="/images/logo-circle.png"
+            alt="The Chesapeake Shell"
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        </div>
+        <div className="flex flex-col leading-tight text-left">
+          <span className="text-sm font-semibold text-slate-900">TheChesapeakeShell</span>
+          <span className="text-xs text-slate-500">@thechesapeakeshell</span>
+        </div>
+      </div>
+      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-tr from-pink-500 via-red-500 to-yellow-500">
+        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/90">
+          <div className="relative h-3.5 w-3.5 rounded-lg border border-slate-700">
+            <div className="absolute inset-[3px] rounded-full border border-slate-700" />
+            <div className="absolute right-[2px] top-[2px] h-1 w-1 rounded-full bg-slate-700" />
+          </div>
+        </div>
+      </div>
+    </a>
+  );
+}
+
+const fallbackCustomShellImages: CustomOrdersImage[] = [
+  { imageUrl: '/images/custom-1.jpg', alt: 'Custom hand-painted oyster shell gift' },
+  { imageUrl: '/images/custom-2.jpg', alt: 'Coastal oyster shell with bespoke colors' },
+  { imageUrl: '/images/custom-3.jpg', alt: 'Personalized oyster shell keepsake' },
+  { imageUrl: '/images/custom-4.jpg', alt: 'Custom decoupage oyster shell art' },
+];
+
+const customShellCards = [
+  {
+    title: 'Something Just for You',
+    body: 'Have a favorite color palette, pattern, or idea? Share your inspiration and we’ll design a shell that feels like it was made just for you.',
+  },
+  {
+    title: 'Weddings & Bridesmaids',
+    body: 'Custom sets for bridesmaids, place settings, or coastal wedding favors — we can match colors, names, and dates to your day.',
+  },
+  {
+    title: 'Names, Dates & Initials',
+    body: 'Add a meaningful touch with initials, important dates, or short phrases that turn each shell into a keepsake.',
+  },
+  {
+    title: 'Events, Clients & Host Gifts',
+    body: 'Perfect for client thank-yous, host gifts, or small event favors when you want something more thoughtful than a standard gift card.',
+  },
+];
 
 export function HomePage() {
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [heroConfig, setHeroConfig] = useState<HeroConfig>({ mainImage: null, gridImages: [] });
-  const [isLoadingHero, setIsLoadingHero] = useState(true);
-
-  const addItem = useCartStore((state) => state.addItem);
-  const isOneOffInCart = useCartStore((state) => state.isOneOffInCart);
-  const setCartDrawerOpen = useUIStore((state) => state.setCartDrawerOpen);
-  const navigate = useNavigate();
+  const [tiles, setTiles] = useState<ShopCategoryTile[]>([]);
+  const [isLoadingTiles, setIsLoadingTiles] = useState(true);
+  const [heroImages, setHeroImages] = useState<HeroCollageImage[]>([]);
+  const [customOrderImages, setCustomOrderImages] = useState<CustomOrdersImage[]>([]);
 
   useEffect(() => {
-    loadAllProducts();
+    loadCategoryTiles();
     loadHeroImages();
   }, []);
 
-  const loadAllProducts = async () => {
+  const loadCategoryTiles = async () => {
     try {
-      const products = await fetchProducts({ visible: true });
-      setAllProducts(products);
+      const loaded = await fetchShopCategoryTiles();
+      setTiles(loaded);
     } catch (error) {
-      console.error('Error loading products:', error);
+      console.error('Error loading category tiles:', error);
     } finally {
-      setIsLoading(false);
+      setIsLoadingTiles(false);
     }
   };
 
   const loadHeroImages = async () => {
     try {
       const config = await fetchHomeHeroConfig();
-      setHeroConfig({
-        mainImage: config.mainImage || null,
-        gridImages: (config.gridImages || []).slice(0, 6),
-      });
+      setHeroImages((config.heroImages || []).slice(0, 3));
+      setCustomOrderImages((config.customOrdersImages || []).slice(0, 4));
     } catch (error) {
       console.error('Error loading hero images:', error);
     } finally {
-      setIsLoadingHero(false);
+      // Even on failure we want to unblock the UI and let fallbacks render.
     }
   };
 
-  const categoryCards = useMemo(() => {
-    return CATEGORY_CONFIG
-      .map((category) => ({
-        ...category,
-        product: allProducts.find((p) => p.type === category.type),
-      }))
-      .filter((item) => item.product) as Array<
-        (typeof CATEGORY_CONFIG)[number] & { product: Product }
-      >;
-  }, [allProducts]);
+  // Helper to keep button text consistent with the new design without changing stored data
+  const getTileCta = (tile: ShopCategoryTile) =>
+    tile.ctaLabel?.replace(/^All\s+/i, 'Shop ') || `Shop ${tile.label}`;
 
-  const handleAddToCart = (product: Product) => {
-    if (!product.priceCents || !product.stripePriceId) return;
-    if (product.oneoff && isOneOffInCart(product.id)) return;
-    addItem({
-      productId: product.id,
-      name: product.name,
-      priceCents: product.priceCents,
-      quantity: 1,
-      imageUrl: product.thumbnailUrl || product.imageUrl,
-      oneoff: product.oneoff,
-      stripeProductId: product.stripeProductId ?? null,
-      stripePriceId: product.stripePriceId ?? null,
-    });
-    setCartDrawerOpen(true);
+  const handleScrollToContact = () => {
+    const el = document.getElementById('contact');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
-  const formatPrice = (priceCents?: number) => {
-    if (!priceCents && priceCents !== 0) return '';
-    return `$${(priceCents / 100).toFixed(2)}`;
-  };
+  const customImagesToShow = customOrderImages.length ? customOrderImages : fallbackCustomShellImages;
 
   return (
     <div className="bg-white">
-      <HeroShowcase image={heroConfig.mainImage} isLoading={isLoadingHero} />
-
-      <HeroGalleryStrip images={heroConfig.gridImages} isLoading={isLoadingHero} />
+      <HomeHero images={heroImages} />
 
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -104,34 +149,174 @@ export function HomePage() {
             Shop by Category
           </h2>
 
-          {isLoading ? (
+          {isLoadingTiles ? (
             <div className="text-center py-12">
-              <p className="text-gray-500 font-sans">Loading products...</p>
+              <p className="text-gray-500 font-sans">Loading categories...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-4">
-              {categoryCards.map((cat) => (
-                <HomeCategoryCard
-                  key={cat.type}
-                  product={cat.product}
-                  label={cat.label}
-                  ctaLabel={cat.cta}
-                  onView={() => navigate(`/product/${cat.product.id}`)}
-                  onAddToCart={() => handleAddToCart(cat.product)}
-                  onNavigate={() => navigate(`/shop?type=${encodeURIComponent(cat.query)}`)}
-                  isCartDisabled={
-                    !cat.product.priceCents ||
-                    (cat.product.oneoff && isOneOffInCart(cat.product.id))
-                  }
-                  priceLabel={formatPrice(cat.product.priceCents)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+                {tiles.map((tile) => (
+                  <Link
+                    key={tile.id}
+                    to={`/shop?type=${encodeURIComponent(tile.categorySlug)}`}
+                    className="group relative block w-full max-w-[340px] mx-auto overflow-hidden rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+                  >
+                  <div className="aspect-[4/5] sm:aspect-square w-full bg-white border border-gray-200">
+                    {tile.imageUrl ? (
+                      <img
+                        src={tile.imageUrl}
+                        alt={tile.label}
+                        className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-102"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
+                        Image
+                      </div>
+                      )}
+                    </div>
+
+                    {/* Soft gradient to lift the pill off the image */}
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/55 to-transparent" />
+
+                    {/* Only visible label pill over the image */}
+                    <div className="absolute inset-x-0 bottom-4 flex justify-center">
+                      <span className="pointer-events-auto inline-flex items-center rounded-full bg-white px-6 py-2 text-sm font-medium text-gray-900 shadow-sm transition-colors group-hover:bg-gray-900 group-hover:text-white">
+                        {getTileCta(tile)}
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              <div className="flex justify-center mt-10">
+                <Link
+                  to="/shop"
+                  className="inline-flex items-center justify-center rounded-full bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+                >
+                  Explore the Whole Collection
+                </Link>
+              </div>
+            </>
           )}
         </div>
       </section>
 
-      <SocialSection />
+      <section className="w-full bg-white py-16 md:py-20">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="text-center mb-10 md:mb-12">
+            <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">Custom Orders</h2>
+            <p className="mt-3 text-sm md:text-base text-slate-600 max-w-2xl mx-auto">
+              Have something specific in mind? From wedding parties to special dates and colors, I’m happy to create custom oyster shell pieces that feel personal to you — or to someone you love.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-8 md:flex-row md:items-start">
+            <div className="flex-1">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                {customImagesToShow.map((img, idx) => (
+                  <div
+                    key={idx}
+                    className="overflow-hidden rounded-2xl shadow-md border border-slate-100"
+                  >
+                    <div className="relative aspect-[4/5] sm:aspect-square">
+                      <img
+                        src={img.imageUrl}
+                        alt={img.alt || 'Custom hand-painted oyster shell art'}
+                        className="absolute inset-0 h-full w-full object-cover"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 max-w-xl md:ml-8">
+              <div className="space-y-4 w-full">
+                {customShellCards.map((card) => (
+                  <div
+                    key={card.title}
+                    className="rounded-2xl bg-white/80 border border-slate-100 shadow-md md:shadow-lg backdrop-blur-sm p-5 md:p-6 transition-transform hover:-translate-y-1 hover:shadow-xl"
+                  >
+                    <h3 className="text-sm font-semibold text-slate-900 mb-1.5">
+                      {card.title}
+                    </h3>
+                    <p className="text-xs md:text-sm text-slate-600">
+                      {card.body}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-center mt-10">
+            <button
+              onClick={handleScrollToContact}
+              className="inline-flex items-center justify-center rounded-full bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+            >
+              Start a Custom Order
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="w-full bg-slate-50/80 py-16 md:py-20">
+        <div className="mx-auto max-w-6xl px-4">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">Follow Along</h2>
+            <p className="mt-3 text-sm md:text-base text-slate-600 max-w-xl mx-auto">
+              See new pieces and find out where I’ll be for craft shows and pop-ups — follow on social to stay up to date.
+            </p>
+          </div>
+
+          <div className="flex flex-row items-center justify-center gap-6 mb-10 flex-wrap">
+            <a
+              href="https://instagram.com/thechesapeakeshell"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-white border border-slate-200 shadow-md rounded-xl px-6 py-3 hover:opacity-90 transition"
+            >
+              <img
+                src="https://files.reimage.dev/modernizedvisions/d8f83b8f2c6e/original"
+                alt="Instagram Icon"
+                className="w-8 h-8 rounded-full object-cover"
+              />
+              <div className="flex flex-col">
+                <span className="font-semibold text-slate-800">TheChesapeakeShell</span>
+                <span className="text-sm text-slate-500">@thechesapeakeshell</span>
+              </div>
+            </a>
+
+            <a
+              href="https://www.tiktok.com/@thechesapeakeshell"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 bg-black text-white shadow-md rounded-xl px-6 py-3 hover:opacity-90 transition"
+            >
+              <img
+                src="https://files.reimage.dev/modernizedvisions/e5eaa1654c4f/original"
+                alt="TikTok Icon"
+                className="w-8 h-8 rounded-full object-cover"
+              />
+              <div className="flex flex-col">
+                <span className="font-semibold">TheChesapeakeShell</span>
+                <span className="text-sm text-gray-300">@thechesapeakeshell</span>
+              </div>
+            </a>
+          </div>
+
+          <div className="mb-10 flex justify-center">
+            <div className="w-full max-w-4xl rounded-2xl border border-slate-200 shadow-lg bg-white overflow-hidden">
+              <img
+                src="/images/popup-setup.jpg"
+                alt="Craft show popup booth with Chesapeake Shell artwork"
+                className="w-full h-auto object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
 
       <ContactForm />
     </div>

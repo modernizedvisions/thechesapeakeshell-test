@@ -41,3 +41,24 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity INTEGER,
   price_cents INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  email TEXT,
+  message TEXT,
+  image_url TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS custom_orders (
+  id TEXT PRIMARY KEY,
+  customer_name TEXT,
+  customer_email TEXT,
+  description TEXT,
+  amount INTEGER,
+  message_id TEXT,
+  status TEXT DEFAULT 'pending',
+  payment_link TEXT,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);

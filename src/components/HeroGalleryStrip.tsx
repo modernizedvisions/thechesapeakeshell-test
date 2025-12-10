@@ -11,20 +11,20 @@ export default function HeroGalleryStrip({ images, isLoading = false }: HeroGall
   const renderedImages = visibleImages;
 
   return (
-    <section className="w-full bg-white py-6">
+    <section className="w-full bg-gray-50 py-8">
       <div className="max-w-6xl mx-auto px-4">
 
         <div className="flex gap-3 md:gap-4 overflow-x-auto md:overflow-visible">
           {isLoading && placeholders.map((i) => (
-            <div key={`loading-${i}`} className="flex-1 min-w-[120px]">
-              <div className="w-full h-32 bg-gray-100 border border-gray-200 rounded-md animate-pulse" />
+            <div key={`loading-${i}`} className="flex-1 min-w-[140px]">
+              <div className="w-full h-44 bg-gray-100 border border-gray-200 rounded-md animate-pulse" />
             </div>
           ))}
 
           {!isLoading && renderedImages.length === 0 &&
             placeholders.map((i) => (
-              <div key={`empty-${i}`} className="flex-1 min-w-[120px]">
-                <div className="w-full h-32 bg-gray-100 border border-gray-300 rounded-md flex items-center justify-center text-gray-400 font-sans text-sm">
+              <div key={`empty-${i}`} className="flex-1 min-w-[140px]">
+                <div className="w-full h-44 bg-gray-100 border border-gray-300 rounded-md flex items-center justify-center text-gray-400 font-sans text-sm">
                   IMG
                 </div>
               </div>
@@ -32,8 +32,8 @@ export default function HeroGalleryStrip({ images, isLoading = false }: HeroGall
 
           {!isLoading &&
             renderedImages.map((img) => (
-              <div key={img.id} className="flex-1 min-w-[120px]">
-                <div className="w-full h-32 rounded-md overflow-hidden border border-gray-200">
+              <div key={img.id} className="flex-1 min-w-[140px]">
+                <div className="w-full h-44 rounded-md overflow-hidden border border-gray-200">
                   <img
                     src={img.imageUrl}
                     alt={img.title || 'Hero gallery'}

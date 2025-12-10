@@ -167,13 +167,6 @@ export function ProductDetailPage() {
               <p className="text-gray-700 leading-relaxed">{product?.description}</p>
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={() => product && navigate(`/checkout?productId=${product.id}`)}
-                  disabled={!canPurchase}
-                  className="flex-1 bg-gray-900 text-white py-3 rounded-lg font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSold ? 'Sold' : 'Buy Now'}
-                </button>
-                <button
                   onClick={handleAddToCart}
                   disabled={!canPurchase || (product?.oneoff && isOneOffInCart(product.id))}
                   className="flex-1 bg-white border border-gray-300 text-gray-800 py-3 rounded-lg font-semibold hover:border-gray-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

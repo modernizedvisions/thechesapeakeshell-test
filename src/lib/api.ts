@@ -15,6 +15,8 @@ import {
   getHomeHeroConfig,
   saveGalleryImages as persistGalleryImages,
   saveHomeHeroConfig as persistHomeHeroConfig,
+  fetchShopCategoryTiles as loadShopCategoryTiles,
+  saveShopCategoryTiles as persistShopCategoryTiles,
 } from './db/content';
 import { getAdminOrders } from './db/orders';
 import { getReviewsForProduct } from './db/reviews';
@@ -38,6 +40,8 @@ export const fetchGalleryImages = getGalleryImages;
 export const saveGalleryImages = persistGalleryImages;
 export const fetchHomeHeroConfig = getHomeHeroConfig;
 export const saveHomeHeroConfig = persistHomeHeroConfig;
+export const fetchShopCategoryTiles = loadShopCategoryTiles;
+export const saveShopCategoryTiles = persistShopCategoryTiles;
 export const fetchReviewsForProduct = getReviewsForProduct;
 // validateCart is no longer exported here (orders/cart validation will be wired separately if needed)
 

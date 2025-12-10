@@ -1,0 +1,194 @@
+type D1PreparedStatement = {
+  all<T>(): Promise<{ results: T[] }>;
+  first<T>(): Promise<T | null>;
+  run(): Promise<{ success: boolean; error?: string; meta?: { changes?: number } }>;
+  bind(...values: unknown[]): D1PreparedStatement;
+};
+
+type D1Database = {
+  prepare(query: string): D1PreparedStatement;
+};
+
+type CustomOrderRow = {
+  id: string;
+  customer_name: string | null;
+  customer_email: string | null;
+  description: string | null;
+  amount: number | null;
+  message_id: string | null;
+  status: string | null;
+  payment_link: string | null;
+  created_at: string | null;
+};
+
+type CustomOrderPayload = {
+  customerName: string;
+  customerEmail: string;
+  description: string;
+  amount?: number;
+  messageId?: string | null;
+  status?: 'pending' | 'paid';
+  paymentLink?: string | null;
+};
+
+export async function onRequestGet(context: { env: { DB: D1Database } }): Promise<Response> {
+  try {
+    await ensureCustomOrdersSchema(context.env.DB);
+    const statement = context.env.DB.prepare(`
+      SELECT id, customer_name, customer_email, description, amount, message_id, status, payment_link, created_at
+      FROM custom_orders
+      ORDER BY created_at DESC
+    `);
+    const { results } = await statement.all<CustomOrderRow>();
+    const orders = (results || []).map(mapRow);
+    return jsonResponse({ orders });
+  } catch (err) {
+    console.error('Failed to fetch custom orders', err);
+    return jsonResponse({ error: 'Failed to fetch custom orders' }, 500);
+  }
+}
+
+export async function onRequestPost(context: { env: { DB: D1Database }; request: Request }): Promise<Response> {
+  try {
+    await ensureCustomOrdersSchema(context.env.DB);
+    const body = (await context.request.json().catch(() => null)) as Partial<CustomOrderPayload> | null;
+    if (!body || !body.customerName || !body.customerEmail || !body.description) {
+      return jsonResponse({ error: 'customerName, customerEmail, and description are required.' }, 400);
+    }
+
+    const id = crypto.randomUUID();
+    const createdAt = new Date().toISOString();
+    const status = body.status === 'paid' ? 'paid' : 'pending';
+
+    const stmt = context.env.DB.prepare(`
+      INSERT INTO custom_orders (id, customer_name, customer_email, description, amount, message_id, status, payment_link, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      id,
+      body.customerName.trim(),
+      body.customerEmail.trim(),
+      body.description.trim(),
+      body.amount ?? null,
+      body.messageId ?? null,
+      status,
+      body.paymentLink ?? null,
+      createdAt
+    );
+
+    const result = await stmt.run();
+    if (!result.success) {
+      console.error('Failed to insert custom order', result.error);
+      return jsonResponse({ error: 'Failed to create custom order' }, 500);
+    }
+
+    // TODO: Add Stripe payment link creation when wiring payments.
+    return jsonResponse({ success: true, id, createdAt });
+  } catch (err) {
+    console.error('Failed to create custom order', err);
+    return jsonResponse({ error: 'Failed to create custom order' }, 500);
+  }
+}
+
+export async function onRequestPatch(context: { env: { DB: D1Database }; request: Request; params: Record<string, string> }): Promise<Response> {
+  try {
+    await ensureCustomOrdersSchema(context.env.DB);
+    const id = context.params?.id;
+    if (!id) return jsonResponse({ error: 'Missing id' }, 400);
+
+    const body = (await context.request.json().catch(() => null)) as Partial<CustomOrderPayload> | null;
+    if (!body) return jsonResponse({ error: 'Invalid body' }, 400);
+
+    const existing = await context.env.DB
+      .prepare(`SELECT id FROM custom_orders WHERE id = ?`)
+      .bind(id)
+      .first<{ id: string }>();
+    if (!existing) return jsonResponse({ error: 'Not found' }, 404);
+
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    if (body.customerName !== undefined) {
+      fields.push('customer_name = ?');
+      values.push(body.customerName.trim());
+    }
+    if (body.customerEmail !== undefined) {
+      fields.push('customer_email = ?');
+      values.push(body.customerEmail.trim());
+    }
+    if (body.description !== undefined) {
+      fields.push('description = ?');
+      values.push(body.description.trim());
+    }
+    if (body.amount !== undefined) {
+      fields.push('amount = ?');
+      values.push(body.amount);
+    }
+    if (body.messageId !== undefined) {
+      fields.push('message_id = ?');
+      values.push(body.messageId);
+    }
+    if (body.status !== undefined) {
+      fields.push('status = ?');
+      values.push(body.status === 'paid' ? 'paid' : 'pending');
+    }
+    if (body.paymentLink !== undefined) {
+      fields.push('payment_link = ?');
+      values.push(body.paymentLink);
+    }
+
+    if (!fields.length) return jsonResponse({ error: 'No fields to update' }, 400);
+
+    const stmt = context.env.DB.prepare(
+      `UPDATE custom_orders SET ${fields.join(', ')} WHERE id = ?`
+    ).bind(...values, id);
+
+    const result = await stmt.run();
+    if (!result.success) {
+      console.error('Failed to update custom order', result.error);
+      return jsonResponse({ error: 'Failed to update custom order' }, 500);
+    }
+
+    // TODO: Add Stripe reconciliation when payments are wired.
+    return jsonResponse({ success: true });
+  } catch (err) {
+    console.error('Failed to update custom order', err);
+    return jsonResponse({ error: 'Failed to update custom order' }, 500);
+  }
+}
+
+async function ensureCustomOrdersSchema(db: D1Database) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS custom_orders (
+    id TEXT PRIMARY KEY,
+    customer_name TEXT,
+    customer_email TEXT,
+    description TEXT,
+    amount INTEGER,
+    message_id TEXT,
+    status TEXT DEFAULT 'pending',
+    payment_link TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  );`).run();
+}
+
+function mapRow(row: CustomOrderRow) {
+  return {
+    id: row.id,
+    customerName: row.customer_name ?? '',
+    customerEmail: row.customer_email ?? '',
+    description: row.description ?? '',
+    amount: row.amount ?? null,
+    messageId: row.message_id ?? null,
+    status: (row.status as 'pending' | 'paid') ?? 'pending',
+    paymentLink: row.payment_link ?? null,
+    createdAt: row.created_at ?? null,
+  };
+}
+
+function jsonResponse(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+    },
+  });
+}
