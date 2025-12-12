@@ -1,6 +1,7 @@
 import React from 'react';
 import { CheckCircle, Eye, EyeOff, Plus, Trash2, Upload } from 'lucide-react';
 import type { GalleryImage } from '../../lib/types';
+import { AdminSectionHeader } from './AdminSectionHeader';
 
 export interface AdminGalleryTabProps {
   images: GalleryImage[];
@@ -113,12 +114,9 @@ function GalleryAdmin({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          <p className="text-sm text-gray-600">{description}</p>
-        </div>
-        <div className="flex items-center gap-3">
+      <div className="mb-4">
+        <AdminSectionHeader title={title} subtitle={description} />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
           <button
             onClick={onSave}
             disabled={saveState === 'saving'}

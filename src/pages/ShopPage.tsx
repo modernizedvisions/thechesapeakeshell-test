@@ -133,7 +133,7 @@ const CATEGORY_COPY: Record<string, { title: string; description: string }> = {
 export function ShopPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [activeCategorySlug, setActiveCategorySlug] = useState<string>('all');
+  const [activeCategorySlug, setActiveCategorySlug] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -148,18 +148,22 @@ export function ShopPage() {
 
   useEffect(() => {
     const typeParam = searchParams.get('type');
-    if (typeParam) {
-      const normalized = toSlug(typeParam);
-      const match = categoryList.find(
-        (c) => toSlug(c.slug) === normalized || toSlug(c.name) === normalized
-      );
-      if (match) {
-        setActiveCategorySlug(match.slug);
-        return;
-      }
+    const normalized = typeParam ? toSlug(typeParam) : '';
+    const match = normalized
+      ? categoryList.find(
+          (c) => toSlug(c.slug) === normalized || toSlug(c.name) === normalized
+        )
+      : undefined;
+
+    if (match) {
+      setActiveCategorySlug(match.slug);
+      return;
     }
-    setActiveCategorySlug('all');
-  }, [searchParams, categoryList]);
+
+    if (categoryList.length && !activeCategorySlug) {
+      setActiveCategorySlug(categoryList[0].slug);
+    }
+  }, [searchParams, categoryList, activeCategorySlug]);
 
   const loadProducts = async () => {
     try {
@@ -208,10 +212,12 @@ export function ShopPage() {
   }, [categoryList, products]);
 
   const orderedSections = useMemo(() => {
-    if (activeCategorySlug === 'all') return categoryList;
-    const active = categoryList.find((c) => c.slug === activeCategorySlug);
+    const resolvedActiveSlug = activeCategorySlug || categoryList[0]?.slug;
+    const active = resolvedActiveSlug
+      ? categoryList.find((c) => c.slug === resolvedActiveSlug)
+      : undefined;
     if (!active) return categoryList;
-    return [active, ...categoryList.filter((c) => c.slug !== activeCategorySlug)];
+    return [active, ...categoryList.filter((c) => c.slug !== active.slug)];
   }, [activeCategorySlug, categoryList]);
 
   return (
@@ -226,33 +232,24 @@ export function ShopPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3 mb-10">
-          {['all', ...categoryList.map((c) => c.slug)].map((slug) => {
-            const isAll = slug === 'all';
-            const label = isAll
-              ? 'All'
-              : categoryList.find((c) => c.slug === slug)?.name || slug;
-            const isActive = activeCategorySlug === slug;
+        <div className="flex flex-wrap justify-center gap-3 mb-8">
+          {categoryList.map((category) => {
+            const isActive = activeCategorySlug === category.slug;
             return (
               <button
-                key={slug}
+                key={category.slug}
                 onClick={() => {
-                  setActiveCategorySlug(slug);
-                  if (isAll) {
-                    searchParams.delete('type');
-                    setSearchParams(searchParams, { replace: true });
-                  } else {
-                    searchParams.set('type', slug);
-                    setSearchParams(searchParams, { replace: true });
-                  }
+                  setActiveCategorySlug(category.slug);
+                  searchParams.set('type', category.slug);
+                  setSearchParams(searchParams, { replace: true });
                 }}
-                className={`px-4 py-2 rounded-full border text-sm font-medium transition-colors ${
+                className={`px-4 py-1.5 rounded-full border text-sm transition ${
                   isActive
-                    ? 'bg-gray-900 text-white border-gray-900'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
                 }`}
               >
-                {label}
+                {category.name}
               </button>
             );
           })}

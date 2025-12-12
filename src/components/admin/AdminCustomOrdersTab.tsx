@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useForm } from 'react-hook-form';
+import { AdminSectionHeader } from './AdminSectionHeader';
 
 interface AdminCustomOrdersTabProps {
   allCustomOrders: any[];
@@ -57,21 +58,23 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900">Custom Orders</h2>
-          <p className="text-sm text-gray-600">Manage bespoke customer requests.</p>
+      <div className="space-y-3">
+        <AdminSectionHeader
+          title="Custom Orders"
+          subtitle="Manage bespoke customer requests and payment links."
+        />
+        <div className="flex justify-center sm:justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              reset(draftDefaults || { customerName: '', customerEmail: '', description: '', amount: '' });
+              setIsModalOpen(true);
+            }}
+            className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+          >
+            New Custom Order
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            reset(draftDefaults || { customerName: '', customerEmail: '', description: '', amount: '' });
-            setIsModalOpen(true);
-          }}
-          className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-        >
-          New Custom Order
-        </button>
       </div>
 
       <div className="rounded-md border border-gray-200">

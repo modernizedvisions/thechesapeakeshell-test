@@ -45,38 +45,13 @@ export type ManagedImage = {
   isNew?: boolean;
 };
 
-const DEFAULT_CATEGORY_OPTIONS: string[] = ['Ring Dish', 'Wine Stopper', 'Decor', 'Ornaments'];
-
 const normalizeCategoryValue = (value: string | undefined | null) => (value || '').trim();
-
-const deriveCategoryOptions = (products: Product[]): string[] => {
-  const names = new Map<string, string>();
-
-  const addName = (name?: string | null) => {
-    const normalized = normalizeCategoryValue(name);
-    if (!normalized) return;
-    const key = normalized.toLowerCase();
-    if (!names.has(key)) names.set(key, normalized);
-  };
-
-  DEFAULT_CATEGORY_OPTIONS.forEach(addName);
-
-  products.forEach((product) => {
-    addName(product.type);
-    addName((product as any).category);
-    if (Array.isArray(product.categories)) {
-      product.categories.forEach((c) => addName(c));
-    }
-  });
-
-  return Array.from(names.values());
-};
 
 const initialProductForm: ProductFormState = {
   name: '',
   description: '',
   price: '',
-  category: DEFAULT_CATEGORY_OPTIONS[0] || '',
+  category: '',
   imageUrl: '',
   imageUrls: '',
   quantityAvailable: 1,
@@ -116,7 +91,6 @@ export function AdminPage() {
   const [messages] = useState<any[]>([]);
   const [customOrders, setCustomOrders] = useState<any[]>([]);
   const [customOrderDraft, setCustomOrderDraft] = useState<any>(null);
-  const [categoryOptions, setCategoryOptions] = useState<string[]>(DEFAULT_CATEGORY_OPTIONS);
 
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -214,7 +188,6 @@ export function AdminPage() {
     try {
       const data = await adminFetchProducts();
       setAdminProducts(data);
-      setCategoryOptions(deriveCategoryOptions(data));
     } catch (err) {
       console.error('Failed to load admin products', err);
       setProductMessage('Could not load products. Showing latest known list.');
@@ -232,7 +205,7 @@ export function AdminPage() {
   };
 
   const resetProductForm = () => {
-    setProductForm({ ...initialProductForm, category: categoryOptions[0] || initialProductForm.category });
+    setProductForm({ ...initialProductForm });
     setProductImages([]);
   };
 
@@ -647,7 +620,6 @@ export function AdminPage() {
             editProductForm={editProductForm}
             productSaveState={productSaveState}
             isLoadingProducts={isLoadingProducts}
-            categoryOptions={categoryOptions}
             productImageFileInputRef={productImageFileInputRef}
             editProductImageFileInputRef={editProductImageFileInputRef}
             onCreateProduct={handleCreateProduct}
@@ -811,7 +783,7 @@ function productToFormState(product: Product): ProductFormState {
     name: product.name,
     description: product.description,
     price: product.priceCents ? (product.priceCents / 100).toFixed(2) : '',
-    category: normalizeCategoryValue(product.type || (product as any).category) || DEFAULT_CATEGORY_OPTIONS[0] || '',
+    category: normalizeCategoryValue(product.type || (product as any).category) || '',
     imageUrl: product.imageUrl,
     imageUrls: product.imageUrls ? product.imageUrls.join(',') : '',
     quantityAvailable: product.quantityAvailable ?? 1,
@@ -827,7 +799,7 @@ function formStateToPayload(state: ProductFormState) {
   const priceNumber = Number(state.price || 0);
   const parsedImages = parseImageUrls(state.imageUrls);
   const quantityAvailable = state.isOneOff ? 1 : Math.max(1, Number(state.quantityAvailable) || 1);
-  const category = normalizeCategoryValue(state.category) || DEFAULT_CATEGORY_OPTIONS[0] || 'Uncategorized';
+  const category = normalizeCategoryValue(state.category);
 
   return {
     name: state.name.trim(),
@@ -877,4 +849,3 @@ function mergeImages(
   }
   return { imageUrl, imageUrls: merged };
 }
-

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, ShoppingCart } from 'lucide-react';
-import { fetchProductById, fetchRelatedProducts, fetchReviewsForProduct } from '../lib/api';
-import { Product, Review } from '../lib/types';
+import { fetchProductById, fetchRelatedProducts } from '../lib/api';
+import { Product } from '../lib/types';
 import { useCartStore } from '../store/cartStore';
 import { useUIStore } from '../store/uiStore';
+import { ProductReviews } from '@/components/product/ProductReviews';
 
 export function ProductDetailPage() {
   const { productId } = useParams();
@@ -15,10 +16,8 @@ export function ProductDetailPage() {
 
   const [product, setProduct] = useState<Product | null>(null);
   const [related, setRelated] = useState<Product[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
   const [loadingProduct, setLoadingProduct] = useState(true);
   const [loadingRelated, setLoadingRelated] = useState(false);
-  const [loadingReviews, setLoadingReviews] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const relatedRef = useRef<HTMLDivElement | null>(null);
 
@@ -35,12 +34,6 @@ export function ProductDetailPage() {
         fetchRelatedProducts(found.type, found.id).then((items) => {
           setRelated(items);
           setLoadingRelated(false);
-        });
-
-        setLoadingReviews(true);
-        fetchReviewsForProduct(found.id).then((r) => {
-          setReviews(r);
-          setLoadingReviews(false);
         });
       }
     };
@@ -253,30 +246,7 @@ export function ProductDetailPage() {
 
       <section className="py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-semibold text-gray-900">Reviews</h2>
-            <button onClick={() => console.info('TODO: open write review form')} className="text-sm text-gray-700 underline">
-              Write a Review
-            </button>
-          </div>
-          {loadingReviews ? (
-            <p className="text-gray-500">Loading reviews...</p>
-          ) : reviews.length === 0 ? (
-            <p className="text-gray-500">No reviews yet.</p>
-          ) : (
-            <div className="space-y-4">
-              {reviews.map((review) => (
-                <div key={review.id} className="p-4 border border-gray-200 rounded-lg bg-white">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-semibold text-gray-900">{review.author}</p>
-                    <p className="text-xs text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
-                  </div>
-                  <div className="text-yellow-500 text-sm mb-2">{'*'.repeat(review.rating)}{' '.repeat(Math.max(0, 5 - review.rating))}</div>
-                  <p className="text-gray-700">{review.comment}</p>
-                </div>
-              ))}
-            </div>
-          )}
+          <ProductReviews />
         </div>
       </section>
     </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import { AdminSectionHeader } from './AdminSectionHeader';
 import type { AdminOrder } from '../../lib/db/orders';
 
 export interface AdminOrdersTabProps {
@@ -11,6 +12,12 @@ export interface AdminOrdersTabProps {
 export function AdminOrdersTab({ searchQuery, filteredOrders, onSearchChange, onSelectOrder }: AdminOrdersTabProps) {
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+      <div className="px-6 pt-6">
+        <AdminSectionHeader
+          title="Orders"
+          subtitle="View and manage storefront orders."
+        />
+      </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3 px-6 pt-6">
         <input
           type="text"

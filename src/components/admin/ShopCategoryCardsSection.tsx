@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { fetchShopCategoryTiles, saveShopCategoryTiles, adminUpdateCategory } from '../../lib/api';
 import type { Category, ShopCategoryTile } from '../../lib/types';
+import { AdminSectionHeader } from './AdminSectionHeader';
 
 interface ShopCategoryCardsSectionProps {
   categories?: Category[];
@@ -25,6 +26,29 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
     setCategoryState(categories);
   }, [categories]);
 
+  // Ensure each tile is hydrated with a categoryId when a matching slug exists.
+  useEffect(() => {
+    if (!tiles.length || !categoryState.length) return;
+
+    let changed = false;
+    const hydrated = tiles.map((tile) => {
+      if (tile.categoryId) return tile;
+      const match = findCategoryBySlug(categoryState, tile.categorySlug);
+      if (!match) return tile;
+      changed = true;
+      return {
+        ...tile,
+        categoryId: match.id,
+        label: match.name || tile.label,
+        ctaLabel: match.name ? `All ${match.name}` : tile.ctaLabel,
+      };
+    });
+
+    if (changed) {
+      setTiles(hydrated);
+    }
+  }, [tiles, categoryState]);
+
   const loadTiles = async () => {
     try {
       const loaded = await fetchShopCategoryTiles();
@@ -38,23 +62,33 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
     }
   };
 
+  const resolveCategoryForTile = (tile: ShopCategoryTile) => {
+    if (!tile) return undefined;
+    return (
+      categoryOptions.find((c) => c.id === tile.categoryId) ||
+      findCategoryBySlug(categoryOptions, tile.categorySlug)
+    );
+  };
+
   const handleTileImageSelect = (file: File, tileId: string) => {
     const reader = new FileReader();
     reader.onload = async () => {
       if (typeof reader.result !== 'string') return;
       const tile = tiles.find((t) => t.id === tileId);
-      if (!tile?.categoryId) {
+      const resolvedCategory = tile ? resolveCategoryForTile(tile) : undefined;
+      const categoryId = resolvedCategory?.id;
+      if (!categoryId) {
         alert('Please select a category before uploading an image.');
         return;
       }
       const imageUrl = reader.result as string;
       // Optimistically update local category hero image
       setCategoryState((prev) =>
-        prev.map((cat) => (cat.id === tile.categoryId ? { ...cat, heroImageUrl: imageUrl } : cat))
+        prev.map((cat) => (cat.id === categoryId ? { ...cat, heroImageUrl: imageUrl } : cat))
       );
 
       try {
-        const updated = await adminUpdateCategory(tile.categoryId, { heroImageUrl: imageUrl });
+        const updated = await adminUpdateCategory(categoryId, { heroImageUrl: imageUrl });
         if (updated) {
           setCategoryState((prev) => prev.map((cat) => (cat.id === updated.id ? { ...cat, ...updated } : cat)));
           onCategoryUpdated?.(updated);
@@ -110,24 +144,22 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">Category Home Page Display</h3>
-          <p className="text-sm text-gray-600">Choose which categories appear on the home page and in what order.</p>
+      <AdminSectionHeader
+        title="Category Home Page Display"
+        subtitle="Choose which categories appear on the home page and in what order."
+        className="mt-10"
+      />
+      {saveState === 'saving' && (
+        <div className="flex items-center justify-center gap-2 text-sm text-gray-500 mb-3">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Saving...
         </div>
-        {saveState === 'saving' && (
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Saving...
-          </div>
-        )}
-        {saveState === 'success' && <div className="text-sm text-green-600">Saved!</div>}
-      </div>
+      )}
+      {saveState === 'success' && <div className="text-sm text-green-600 text-center mb-3">Saved!</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
         {tiles.slice(0, SLOT_COUNT).map((tile, idx) => {
-          const selectedCategory =
-            categoryOptions.find((c) => c.id === tile.categoryId) || findCategoryBySlug(categoryOptions, tile.categorySlug);
+          const selectedCategory = resolveCategoryForTile(tile);
           const displayLabel = selectedCategory?.name || tile.label || `Category ${idx + 1}`;
           const pillText = `Shop ${displayLabel}`;
           const categoryImage = selectedCategory?.heroImageUrl || selectedCategory?.imageUrl;

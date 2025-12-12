@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { CheckCircle, Loader2, Plus } from 'lucide-react';
-import type { CustomOrdersImage, HeroCollageImage } from '../../lib/types';
+import type { Category, CustomOrdersImage, HeroCollageImage } from '../../lib/types';
+import { AdminSectionHeader } from './AdminSectionHeader';
+import { adminFetchCategories } from '../../lib/api';
+import { ShopCategoryCardsSection } from './ShopCategoryCardsSection';
 
 export interface AdminHomeTabProps {
   heroImages: HeroCollageImage[];
@@ -19,6 +22,20 @@ export function AdminHomeTab({
   onSaveHeroConfig,
   homeSaveState,
 }: AdminHomeTabProps) {
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const apiCategories = await adminFetchCategories();
+        setCategories(normalizeCategoriesList(apiCategories));
+      } catch (error) {
+        console.error('Failed to load categories', error);
+      }
+    };
+    loadCategories();
+  }, []);
+
   return (
     <div className="space-y-6">
       <HeroCollageAdmin images={heroImages} onChange={onHeroChange} onSave={onSaveHeroConfig} saveState={homeSaveState} />
@@ -28,6 +45,13 @@ export function AdminHomeTab({
         onChange={onCustomOrdersChange}
         onSave={onSaveHeroConfig}
         saveState={homeSaveState}
+      />
+
+      <ShopCategoryCardsSection
+        categories={categories}
+        onCategoryUpdated={(updated) => {
+          setCategories((prev) => normalizeCategoriesList(prev.map((c) => (c.id === updated.id ? updated : c))));
+        }}
       />
     </div>
   );
@@ -79,30 +103,33 @@ function HeroCollageAdmin({ images, onChange, onSave, saveState }: HeroCollageAd
 
   return (
     <section className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
-      <header className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800">Hero Collage Images</h2>
-        <button
-          onClick={onSave}
-          disabled={saveState === 'saving'}
-          className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
-        >
-          {saveState === 'saving' ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : saveState === 'success' ? (
-            <>
-              <CheckCircle className="h-4 w-4 text-green-200" />
-              Saved
-            </>
-          ) : (
-            'Save'
-          )}
-        </button>
-      </header>
-
-      <p className="text-xs text-slate-500">These three images appear in the floating collage on the homepage hero.</p>
+      <div className="space-y-2">
+        <AdminSectionHeader
+          title="Hero Collage Images"
+          subtitle="These three images appear in the floating collage on the homepage hero."
+        />
+        <div className="flex justify-center sm:justify-end">
+          <button
+            onClick={onSave}
+            disabled={saveState === 'saving'}
+            className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
+          >
+            {saveState === 'saving' ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : saveState === 'success' ? (
+              <>
+                <CheckCircle className="h-4 w-4 text-green-200" />
+                Saved
+              </>
+            ) : (
+              'Save'
+            )}
+          </button>
+        </div>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         {slots.map((slot) => {
@@ -188,6 +215,17 @@ interface CustomOrdersImagesAdminProps {
   saveState: 'idle' | 'saving' | 'success';
 }
 
+const normalizeCategoriesList = (items: Category[]): Category[] => {
+  const map = new Map<string, Category>();
+  items.forEach((cat) => {
+    const key = cat.id || cat.name;
+    if (!key) return;
+    const normalized: Category = { ...cat, id: cat.id || key };
+    map.set(key, normalized);
+  });
+  return Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+};
+
 function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: CustomOrdersImagesAdminProps) {
   const slots = [0, 1, 2, 3];
 
@@ -219,34 +257,35 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
 
   return (
     <section className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
-      <header className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-800">Custom Shell Orders Images</h2>
-        <button
-          onClick={onSave}
-          disabled={saveState === 'saving'}
-          className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
-        >
-          {saveState === 'saving' ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : saveState === 'success' ? (
-            <>
-              <CheckCircle className="h-4 w-4 text-green-200" />
-              Saved
-            </>
-          ) : (
-            'Save'
-          )}
-        </button>
-      </header>
+      <div className="space-y-2">
+        <AdminSectionHeader
+          title="Custom Shell Orders Images"
+          subtitle="Images that appear next to the Custom Shell Orders section on the home page."
+        />
+        <div className="flex justify-center sm:justify-end">
+          <button
+            onClick={onSave}
+            disabled={saveState === 'saving'}
+            className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
+          >
+            {saveState === 'saving' ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : saveState === 'success' ? (
+              <>
+                <CheckCircle className="h-4 w-4 text-green-200" />
+                Saved
+              </>
+            ) : (
+              'Save'
+            )}
+          </button>
+        </div>
+      </div>
 
-      <p className="text-xs text-slate-500">
-        These four images appear in the 2×2 photo grid next to the “Custom Shell Orders” section on the home page.
-      </p>
-
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {slots.map((slot) => {
           const image = images[slot];
           const inputId = `custom-orders-${slot}`;
@@ -279,7 +318,7 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
                 </div>
               </div>
 
-              <div className="aspect-[4/5] rounded-md border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
+              <div className="aspect-[3/4] rounded-md border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
                 {image?.imageUrl ? (
                   <img src={image.imageUrl} alt={image.alt || `Custom orders ${slot + 1}`} className="h-full w-full object-cover" />
                 ) : (
@@ -298,7 +337,9 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
                   id={`${inputId}-alt`}
                   type="text"
                   value={image?.alt || ''}
-                  onChange={(e) => handleAltChange(slot, e.target.value)}
+                  onChange={(e) => {
+                    handleAltChange(slot, e.target.value);
+                  }}
                   placeholder="Optional description"
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
                 />

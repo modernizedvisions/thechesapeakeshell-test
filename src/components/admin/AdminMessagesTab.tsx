@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Copy, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { AdminSectionHeader } from './AdminSectionHeader';
 
 interface AdminMessage {
   id: string;
@@ -93,10 +94,7 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Messages</h2>
-        <p className="text-sm text-gray-600">Customer messages from the contact form.</p>
-      </div>
+      <AdminSectionHeader title="Messages" subtitle="Customer messages from the contact form." />
 
       {isLoading && <div className="text-sm text-gray-500">Loading messages...</div>}
       {error && !isLoading && <div className="text-sm text-red-600">{error}</div>}

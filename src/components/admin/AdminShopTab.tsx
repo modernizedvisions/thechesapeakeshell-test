@@ -3,18 +3,31 @@ import { CheckCircle, Loader2, Trash2 } from 'lucide-react';
 import type { Category, Product } from '../../lib/types';
 import type { ManagedImage, ProductFormState } from '../../pages/AdminPage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import {
-  adminCreateCategory,
-  adminDeleteCategory,
-  adminFetchCategories,
-} from '../../lib/api';
-import { ShopCategoryCardsSection } from './ShopCategoryCardsSection';
+import { adminFetchCategories } from '../../lib/api';
+import { AdminSectionHeader } from './AdminSectionHeader';
+import { CategoryManagementModal } from './CategoryManagementModal';
 
 interface ProductAdminCardProps {
   product: Product;
   onEdit: (product: Product) => void;
   onDelete?: (id: string) => Promise<void> | void;
 }
+
+const normalizeCategoriesList = (items: Category[]): Category[] => {
+  const map = new Map<string, Category>();
+
+  items.forEach((cat) => {
+    const key = cat.id || cat.name;
+    if (!key) return;
+    const normalized: Category = {
+      ...cat,
+      id: cat.id || key,
+    };
+    map.set(key, normalized);
+  });
+
+  return Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+};
 
 const ProductAdminCard: React.FC<ProductAdminCardProps> = ({ product, onEdit, onDelete }) => {
   const primaryImageUrl = Array.isArray((product as any).images) && (product as any).images.length > 0
@@ -123,7 +136,6 @@ export interface AdminShopTabProps {
   editProductForm: ProductFormState | null;
   productSaveState: 'idle' | 'saving' | 'success' | 'error';
   isLoadingProducts: boolean;
-  categoryOptions: string[];
   productImageFileInputRef: React.RefObject<HTMLInputElement>;
   editProductImageFileInputRef: React.RefObject<HTMLInputElement>;
   onCreateProduct: (e: React.FormEvent) => void | Promise<void>;
@@ -153,7 +165,6 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
   editProductForm,
   productSaveState,
   isLoadingProducts,
-  categoryOptions,
   productImageFileInputRef,
   editProductImageFileInputRef,
   onCreateProduct,
@@ -178,9 +189,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
   const [editImages, setEditImages] = useState<ManagedImage[]>([]);
   const [activeProductSlot, setActiveProductSlot] = useState<number | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
-  const [categoryMessage, setCategoryMessage] = useState<string>('');
-  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const maxModalImages = 4;
 
   const normalizeCategory = (value: string | undefined | null) => (value || '').trim().toLowerCase();
@@ -203,16 +212,14 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
   useEffect(() => {
     let cancelled = false;
     const loadCategories = async () => {
-      setIsLoadingCategories(true);
       try {
         const apiCategories = await adminFetchCategories();
+        const normalized = normalizeCategoriesList(apiCategories);
         if (cancelled) return;
-        setCategories(apiCategories);
+        setCategories(normalized);
       } catch (error) {
         console.error('Failed to load categories', error);
-        setCategoryMessage('Could not load categories.');
       } finally {
-        if (!cancelled) setIsLoadingCategories(false);
       }
     };
     loadCategories();
@@ -220,6 +227,30 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    const names = categories.map((c) => c.name).filter(Boolean);
+    const firstAvailable = names[0] || '';
+
+    if (names.length === 0) {
+      if (productForm.category) onProductFormChange('category', '');
+      if (editProductForm?.category) onEditFormChange('category', '');
+      if (selectedCategory !== 'All') setSelectedCategory('All');
+      return;
+    }
+
+    if (!productForm.category || !names.includes(productForm.category)) {
+      onProductFormChange('category', firstAvailable);
+    }
+
+    if (editProductForm && (!editProductForm.category || !names.includes(editProductForm.category))) {
+      onEditFormChange('category', firstAvailable);
+    }
+
+    if (selectedCategory !== 'All' && !names.includes(selectedCategory)) {
+      setSelectedCategory('All');
+    }
+  }, [categories, editProductForm, onEditFormChange, onProductFormChange, productForm.category, selectedCategory]);
 
   const handleModalFileSelect = (files: FileList | null) => {
     onAddEditProductImages(files);
@@ -268,21 +299,13 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
     }
   }, [isEditModalOpen, editProductImages, editProductId]);
 
-  const categoryNames = useMemo(() => {
-    const names = new Set<string>([...categoryOptions]);
-    categories.forEach((c) => names.add(c.name));
-    return Array.from(names);
-  }, [categories, categoryOptions]);
-
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Shop / Products</h2>
-            <p className="text-sm text-gray-600">Add, edit, and manage all products shown in the storefront.</p>
-          </div>
-        </div>
+        <AdminSectionHeader
+          title="Shop / Products"
+          subtitle="Add, edit, and manage all products shown in the storefront."
+        />
 
         {productMessage && (
           <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
@@ -328,27 +351,40 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Product Category
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium text-slate-700">
+                      Categories
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsCategoryModalOpen(true)}
+                      className="text-xs font-medium text-slate-500 hover:text-slate-800 underline"
+                    >
+                      Edit Categories
+                    </button>
+                  </div>
                   <div className="rounded-lg border border-slate-200 bg-slate-50 max-h-40 overflow-y-auto">
-                    {categoryNames.length === 0 ? (
+                    {categories.length === 0 ? (
                       <p className="px-3 py-2 text-xs text-slate-500">No categories. Create one above.</p>
                     ) : (
-                      categoryNames.map((cat) => (
+                      categories.map((cat, idx) => {
+                        const catName = cat.name || '';
+                        const key = cat.id || (cat as any).slug || `${catName || 'category'}-${idx}`;
+                        return (
                         <label
-                          key={cat}
+                          key={key}
                           className="flex items-center gap-2 px-3 py-1 text-sm hover:bg-slate-100 cursor-pointer"
                         >
                           <input
                             type="checkbox"
-                            checked={productForm.category === cat}
-                            onChange={() => onProductFormChange('category', cat)}
+                            checked={productForm.category === catName}
+                            onChange={() => onProductFormChange('category', catName)}
                             className="h-4 w-4 rounded border-slate-300"
                           />
-                          <span className="text-slate-800">{cat}</span>
+                          <span className="text-slate-800">{catName || 'Unnamed category'}</span>
                         </label>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -493,97 +529,12 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
         </form>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900">Category Management</h2>
-            <p className="text-sm text-gray-600">Add or delete categories available to products.</p>
-          </div>
-          {isLoadingCategories && (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading...
-            </div>
-          )}
-        </div>
-
-        {categoryMessage && (
-          <div className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            {categoryMessage}
-          </div>
-        )}
-
-        <div className="mb-4 flex flex-wrap gap-3">
-          <input
-            type="text"
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            placeholder="New category name"
-            className="w-full max-w-xs rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-          />
-          <button
-            type="button"
-            onClick={async () => {
-              const trimmed = newCategoryName.trim();
-              if (!trimmed) return;
-              try {
-                const created = await adminCreateCategory(trimmed);
-                if (created) {
-                  setCategories((prev) => [...prev, created]);
-                  setNewCategoryName('');
-                  setCategoryMessage('');
-                  onProductFormChange('category', created.name);
-                }
-              } catch (error) {
-                console.error('Failed to create category', error);
-                setCategoryMessage('Could not create category.');
-              }
-            }}
-            disabled={!newCategoryName.trim()}
-            className="inline-flex items-center rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
-          >
-            Add Category
-          </button>
-        </div>
-
-        <div className="border border-slate-200 rounded-lg">
-          <div className="max-h-60 overflow-y-auto divide-y divide-slate-200">
-            {categories.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-slate-500">No categories yet.</p>
-            ) : (
-              categories.map((cat) => (
-                <div key={cat.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                  <span className="text-slate-800">{cat.name}</span>
-                  <button
-                    type="button"
-                    className="text-slate-500 hover:text-red-600"
-                    onClick={async () => {
-                      const confirmed = window.confirm('Delete this category?');
-                      if (!confirmed) return;
-                      try {
-                        await adminDeleteCategory(cat.id);
-                        setCategories((prev) => prev.filter((c) => c.id !== cat.id));
-                      } catch (error) {
-                        console.error('Failed to delete category', error);
-                        setCategoryMessage('Could not delete category.');
-                      }
-                    }}
-                    aria-label={`Delete ${cat.name}`}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      <ShopCategoryCardsSection
+      <CategoryManagementModal
+        open={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
         categories={categories}
-        onCategoryUpdated={(updated) => {
-          setCategories((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
-        }}
+        onCategoriesChange={(updated) => setCategories(normalizeCategoriesList(updated))}
+        onCategorySelected={(name) => onProductFormChange('category', name)}
       />
 
       <div className="mt-8">
@@ -602,9 +553,15 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm sm:max-w-xs"
           >
             <option value="All">All types</option>
-            {categoryNames.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
+            {categories.map((c, idx) => {
+              const name = c.name || '';
+              const key = c.id || (c as any).slug || `${name || 'category'}-${idx}`;
+              return (
+                <option key={key} value={name}>
+                  {name || 'Unnamed category'}
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -756,11 +713,19 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                       onChange={(e) => onEditFormChange('category', e.target.value)}
                       className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                     >
-                      {categoryNames.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
+                      {categories.length === 0 ? (
+                        <option value="">No categories available</option>
+                      ) : (
+                        categories.map((option, idx) => {
+                          const name = option.name || '';
+                          const key = option.id || (option as any).slug || `${name || 'category'}-${idx}`;
+                          return (
+                            <option key={key} value={name}>
+                              {name || 'Unnamed category'}
+                            </option>
+                          );
+                        })
+                      )}
                     </select>
                   </div>
                   <div className="flex items-center gap-3">
@@ -962,7 +927,3 @@ function ManagedImagesList({
     </div>
   );
 }
-
-
-
-

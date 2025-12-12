@@ -27,10 +27,13 @@ export function GalleryPage() {
   return (
     <div className="py-12 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <h1 className="text-4xl font-bold text-gray-900 mb-4">Gallery</h1>
-        <p className="text-gray-600 mb-8">
-          Explore our collection of art pieces and sold works
+        <h1 className="text-center text-3xl md:text-4xl font-semibold uppercase tracking-wide text-slate-900 mb-2">
+          Gallery
+        </h1>
+        <p className="text-center text-slate-600 text-sm md:text-base mb-10">
+          Explore our collection of art pieces and sold works.
         </p>
+        <div className="mt-8"></div>
 
         {isLoading ? (
           <div className="text-center py-12">
@@ -39,7 +42,6 @@ export function GalleryPage() {
         ) : (
           <>
             <section className="mb-12">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-4">Manual Gallery</h2>
               {galleryImages.length === 0 ? (
                 <div className="text-gray-500">No images yet.</div>
               ) : (
