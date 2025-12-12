@@ -52,8 +52,6 @@ type NewProductInput = {
   collection?: string;
 };
 
-const ALLOWED_CATEGORIES = ['Ring Dish', 'Wine Stopper', 'Decor', 'Ornaments'];
-
 const mapRowToProduct = (row: ProductRow): Product => {
   const imageUrls = row.image_urls_json ? safeParseJsonArray(row.image_urls_json) : [];
   const primaryImage = row.image_url || imageUrls[0] || '';
@@ -68,6 +66,8 @@ const mapRowToProduct = (row: ProductRow): Product => {
     imageUrl: primaryImage,
     thumbnailUrl: primaryImage || undefined,
     type: row.category ?? 'General',
+    category: row.category ?? undefined,
+    categories: row.category ? [row.category] : undefined,
     collection: row.collection ?? undefined,
     oneoff: row.is_one_off === null ? true : row.is_one_off === 1,
     visible: row.is_active === null ? true : row.is_active === 1,
@@ -96,8 +96,7 @@ const toSlug = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)+/g, '');
 
-const validateCategory = (category: string | undefined) =>
-  category && ALLOWED_CATEGORIES.includes(category);
+const sanitizeCategory = (value: string | undefined | null) => (value || '').trim();
 
 const validateNewProduct = (input: Partial<NewProductInput>) => {
   if (!input.name || !input.description || input.priceCents === undefined || input.priceCents === null) {
@@ -106,8 +105,8 @@ const validateNewProduct = (input: Partial<NewProductInput>) => {
   if (input.priceCents < 0) {
     return 'priceCents must be non-negative';
   }
-  if (!validateCategory(input.category)) {
-    return `category must be one of: ${ALLOWED_CATEGORIES.join(', ')}`;
+  if (!sanitizeCategory(input.category)) {
+    return 'category is required';
   }
   if (!input.imageUrl) {
     return 'imageUrl is required';
@@ -202,6 +201,7 @@ export async function onRequestPost(context: { env: { DB: D1Database; STRIPE_SEC
     const isOneOff = body.isOneOff ?? true;
     const quantityAvailable = isOneOff ? 1 : Math.max(1, body.quantityAvailable ?? 1);
     const isActive = body.isActive ?? true;
+    const category = sanitizeCategory(body.category);
 
     await ensureProductSchema(context.env.DB);
 
@@ -218,7 +218,7 @@ export async function onRequestPost(context: { env: { DB: D1Database; STRIPE_SEC
       slug,
       body.description,
       body.priceCents,
-      body.category,
+      category,
       body.imageUrl,
       body.imageUrls && body.imageUrls.length ? JSON.stringify(body.imageUrls) : null,
       isActive ? 1 : 0,
@@ -311,10 +311,62 @@ export async function onRequestPost(context: { env: { DB: D1Database; STRIPE_SEC
   }
 }
 
+async function onRequestDelete(context: { env: { DB: D1Database }; request: Request }): Promise<Response> {
+  try {
+    const url = new URL(context.request.url);
+    let id = url.searchParams.get('id');
+
+    if (!id) {
+      try {
+        const body = (await context.request.json().catch(() => null)) as { id?: string } | null;
+        if (body?.id) id = body.id;
+      } catch {
+        // ignore body parse errors
+      }
+    }
+
+    if (!id) {
+      return new Response(JSON.stringify({ error: 'Missing id' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    await ensureProductSchema(context.env.DB);
+
+    const result = await context.env.DB.prepare('DELETE FROM products WHERE id = ?;')
+      .bind(id)
+      .run();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Delete failed');
+    }
+
+    if (result.meta?.changes === 0) {
+      return new Response(JSON.stringify({ error: 'Product not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('Failed to delete product', error);
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
 export async function onRequest(context: { env: { DB: D1Database }; request: Request }): Promise<Response> {
   const method = context.request.method.toUpperCase();
   if (method === 'GET') return onRequestGet(context);
   if (method === 'POST') return onRequestPost(context);
+  if (method === 'DELETE') return onRequestDelete(context);
   return new Response(JSON.stringify({ error: 'Method not allowed' }), {
     status: 405,
     headers: { 'Content-Type': 'application/json' },

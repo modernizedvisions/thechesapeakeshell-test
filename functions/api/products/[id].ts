@@ -53,6 +53,8 @@ const mapRowToProduct = (row: ProductRow): Product => {
     imageUrl: primaryImage,
     thumbnailUrl: primaryImage || undefined,
     type: row.category ?? 'General',
+    category: row.category ?? undefined,
+    categories: row.category ? [row.category] : undefined,
     collection: row.collection ?? row.category ?? undefined,
     oneoff: row.is_one_off === null ? true : row.is_one_off === 1,
     visible: row.is_active === null ? true : row.is_active === 1,

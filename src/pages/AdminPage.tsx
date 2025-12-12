@@ -6,15 +6,13 @@ import {
   fetchSoldProducts,
   saveGalleryImages,
   saveHomeHeroConfig,
-  fetchShopCategoryTiles,
-  saveShopCategoryTiles,
   verifyAdminPassword,
   adminFetchProducts,
   adminCreateProduct,
   adminUpdateProduct,
   adminDeleteProduct,
 } from '../lib/api';
-import { CustomOrdersImage, GalleryImage, HeroCollageImage, HeroConfig, Product, ShopCategoryTile } from '../lib/types';
+import { CustomOrdersImage, GalleryImage, HeroCollageImage, HeroConfig, Product } from '../lib/types';
 import type { AdminOrder } from '../lib/db/orders';
 import { AdminOrdersTab } from '../components/admin/AdminOrdersTab';
 import { AdminSoldTab } from '../components/admin/AdminSoldTab';
@@ -28,7 +26,7 @@ export type ProductFormState = {
   name: string;
   description: string;
   price: string;
-  category: 'Ring Dish' | 'Wine Stopper' | 'Decor' | 'Ornaments';
+  category: string;
   imageUrl: string;
   imageUrls: string;
   quantityAvailable: number;
@@ -47,13 +45,38 @@ export type ManagedImage = {
   isNew?: boolean;
 };
 
-const CATEGORY_OPTIONS: ProductFormState['category'][] = ['Ring Dish', 'Wine Stopper', 'Decor', 'Ornaments'];
+const DEFAULT_CATEGORY_OPTIONS: string[] = ['Ring Dish', 'Wine Stopper', 'Decor', 'Ornaments'];
+
+const normalizeCategoryValue = (value: string | undefined | null) => (value || '').trim();
+
+const deriveCategoryOptions = (products: Product[]): string[] => {
+  const names = new Map<string, string>();
+
+  const addName = (name?: string | null) => {
+    const normalized = normalizeCategoryValue(name);
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (!names.has(key)) names.set(key, normalized);
+  };
+
+  DEFAULT_CATEGORY_OPTIONS.forEach(addName);
+
+  products.forEach((product) => {
+    addName(product.type);
+    addName((product as any).category);
+    if (Array.isArray(product.categories)) {
+      product.categories.forEach((c) => addName(c));
+    }
+  });
+
+  return Array.from(names.values());
+};
 
 const initialProductForm: ProductFormState = {
   name: '',
   description: '',
   price: '',
-  category: 'Ring Dish',
+  category: DEFAULT_CATEGORY_OPTIONS[0] || '',
   imageUrl: '',
   imageUrls: '',
   quantityAvailable: 1,
@@ -80,8 +103,6 @@ export function AdminPage() {
   const [activeTab, setActiveTab] = useState<'orders' | 'sold' | 'gallery' | 'home' | 'shop' | 'messages' | 'customOrders'>('orders');
   const [gallerySaveState, setGallerySaveState] = useState<'idle' | 'saving' | 'success'>('idle');
   const [homeSaveState, setHomeSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
-  const [shopCategoryTiles, setShopCategoryTiles] = useState<ShopCategoryTile[]>([]);
-  const [categoryTilesSaveState, setCategoryTilesSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
   const [productSaveState, setProductSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [productMessage, setProductMessage] = useState<string>('');
   const [productForm, setProductForm] = useState<ProductFormState>(initialProductForm);
@@ -92,14 +113,10 @@ export function AdminPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const productImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const editProductImageFileInputRef = useRef<HTMLInputElement | null>(null);
-  const categoryTileFileInputRef = useRef<HTMLInputElement | null>(null);
-  const [activeTileId, setActiveTileId] = useState<string | null>(null);
-  const [productSearch, setProductSearch] = useState('');
-  const [productFilterCategory, setProductFilterCategory] = useState<'All' | ProductFormState['category']>('All');
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [messages] = useState<any[]>([]);
   const [customOrders, setCustomOrders] = useState<any[]>([]);
   const [customOrderDraft, setCustomOrderDraft] = useState<any>(null);
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(DEFAULT_CATEGORY_OPTIONS);
 
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -123,18 +140,6 @@ export function AdminPage() {
       currency: currency.toUpperCase(),
     }).format(amount);
   };
-
-  const filteredProductsList = useMemo(() => {
-    const term = productSearch.trim().toLowerCase();
-    return adminProducts.filter((p) => {
-      const matchesSearch =
-        !term ||
-        p.name.toLowerCase().includes(term) ||
-        (p.description || '').toLowerCase().includes(term);
-      const matchesCategory = productFilterCategory === 'All' || p.type === productFilterCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [adminProducts, productSearch, productFilterCategory]);
 
   const handleSaveHeroConfig = async () => {
     setHomeSaveState('saving');
@@ -182,12 +187,11 @@ export function AdminPage() {
   };
 
   const loadAdminData = async () => {
-    const [ordersData, soldData, galleryData, heroData, categoryTiles] = await Promise.all([
+    const [ordersData, soldData, galleryData, heroData] = await Promise.all([
       fetchOrders(),
       fetchSoldProducts(),
       fetchGalleryImages(),
       fetchHomeHeroConfig(),
-      fetchShopCategoryTiles(),
     ]);
     setOrders(ordersData);
     setSoldProducts(soldData);
@@ -196,7 +200,6 @@ export function AdminPage() {
       heroImages: (heroData.heroImages || []).slice(0, 3),
       customOrdersImages: (heroData.customOrdersImages || []).slice(0, 4),
     });
-    setShopCategoryTiles(categoryTiles);
     await loadAdminProducts();
   };
 
@@ -211,6 +214,7 @@ export function AdminPage() {
     try {
       const data = await adminFetchProducts();
       setAdminProducts(data);
+      setCategoryOptions(deriveCategoryOptions(data));
     } catch (err) {
       console.error('Failed to load admin products', err);
       setProductMessage('Could not load products. Showing latest known list.');
@@ -228,53 +232,59 @@ export function AdminPage() {
   };
 
   const resetProductForm = () => {
-    setProductForm(initialProductForm);
+    setProductForm({ ...initialProductForm, category: categoryOptions[0] || initialProductForm.category });
     setProductImages([]);
   };
 
-  const handleTileImageSelect = (file: File, tileId: string) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setShopCategoryTiles((prev) =>
-          prev.map((tile) => (tile.id === tileId ? { ...tile, imageUrl: reader.result as string } : tile))
-        );
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSaveCategoryTiles = async () => {
-    setCategoryTilesSaveState('saving');
-    try {
-      await saveShopCategoryTiles(shopCategoryTiles);
-      setCategoryTilesSaveState('success');
-      setTimeout(() => setCategoryTilesSaveState('idle'), 1500);
-    } catch (err) {
-      console.error('Failed to save category tiles', err);
-      setCategoryTilesSaveState('idle');
-    }
-  };
-
-  const addImages = (files: FileList | null, setImages: React.Dispatch<React.SetStateAction<ManagedImage[]>>) => {
+  const addImages = (
+    files: FileList | null,
+    setImages: React.Dispatch<React.SetStateAction<ManagedImage[]>>,
+    slotIndex?: number
+  ) => {
     if (!files) return;
     const incoming = Array.from(files);
     setImages((prev) => {
-      const remaining = Math.max(0, 4 - prev.length);
-      if (remaining === 0) return prev;
-      const selected = incoming.slice(0, remaining);
-      const newEntries: ManagedImage[] = selected.map((file) => ({
-        id: crypto.randomUUID(),
-        url: URL.createObjectURL(file),
-        file,
-        isPrimary: false,
-        isNew: true,
-      }));
-      const combined = [...prev, ...newEntries];
-      if (!combined.some((img) => img.isPrimary) && combined.length > 0) {
-        combined[0].isPrimary = true;
+      const maxSlots = 4;
+      const selected = incoming.slice(0, maxSlots);
+      let result = [...prev];
+
+      // If a slot index is provided, replace starting at that slot.
+      if (slotIndex !== undefined && slotIndex !== null && slotIndex >= 0) {
+        const start = Math.min(slotIndex, maxSlots - 1);
+        selected.forEach((file, offset) => {
+          const pos = Math.min(start + offset, maxSlots - 1);
+          const newEntry: ManagedImage = {
+            id: crypto.randomUUID(),
+            url: URL.createObjectURL(file),
+            file,
+            isPrimary: false,
+            isNew: true,
+          };
+          result[pos] = newEntry;
+        });
+      } else {
+        // Default behavior: append into remaining slots
+        const remaining = Math.max(0, maxSlots - result.length);
+        if (remaining === 0) return result;
+        const toAdd = selected.slice(0, remaining).map((file) => ({
+          id: crypto.randomUUID(),
+          url: URL.createObjectURL(file),
+          file,
+          isPrimary: false,
+          isNew: true,
+        }));
+        result = [...result, ...toAdd];
       }
-      return combined;
+
+      // Limit to 4 slots
+      result = result.slice(0, maxSlots);
+
+      // Ensure there is a primary image
+      if (!result.some((img) => img?.isPrimary) && result.length > 0) {
+        result[0].isPrimary = true;
+      }
+
+      return result;
     });
   };
 
@@ -445,8 +455,6 @@ export function AdminPage() {
   };
 
   const handleDeleteProduct = async (id: string) => {
-    const confirmed = window.confirm('Delete this product?');
-    if (!confirmed) return;
     try {
       await adminDeleteProduct(id);
       await loadAdminProducts();
@@ -625,13 +633,6 @@ export function AdminPage() {
             onCustomOrdersChange={(images) => setHeroConfig((prev) => ({ ...prev, customOrdersImages: images }))}
             onSaveHeroConfig={handleSaveHeroConfig}
             homeSaveState={homeSaveState}
-            shopCategoryTiles={shopCategoryTiles}
-            categoryTilesSaveState={categoryTilesSaveState}
-            onSaveCategoryTiles={handleSaveCategoryTiles}
-            onTileImageSelect={handleTileImageSelect}
-            categoryTileFileInputRef={categoryTileFileInputRef}
-            onSelectTileId={setActiveTileId}
-            activeTileId={activeTileId}
           />
         )}
 
@@ -646,16 +647,16 @@ export function AdminPage() {
             editProductForm={editProductForm}
             productSaveState={productSaveState}
             isLoadingProducts={isLoadingProducts}
-            categoryOptions={CATEGORY_OPTIONS}
+            categoryOptions={categoryOptions}
             productImageFileInputRef={productImageFileInputRef}
             editProductImageFileInputRef={editProductImageFileInputRef}
             onCreateProduct={handleCreateProduct}
             onProductFormChange={handleProductFormChange}
             onResetProductForm={resetProductForm}
-            onAddProductImages={(files) => addImages(files, setProductImages)}
+            onAddProductImages={(files, slotIndex) => addImages(files, setProductImages, slotIndex)}
             onSetPrimaryProductImage={(id) => setPrimaryImage(id, setProductImages)}
             onRemoveProductImage={(id) => removeImage(id, setProductImages)}
-            onAddEditProductImages={(files) => addImages(files, setEditProductImages)}
+            onAddEditProductImages={(files, slotIndex) => addImages(files, setEditProductImages, slotIndex)}
             onSetPrimaryEditImage={(id) => setPrimaryImage(id, setEditProductImages)}
             onMoveEditImage={(id, dir) => moveImage(id, dir, setEditProductImages)}
             onRemoveEditImage={(id) => removeImage(id, setEditProductImages)}
@@ -810,7 +811,7 @@ function productToFormState(product: Product): ProductFormState {
     name: product.name,
     description: product.description,
     price: product.priceCents ? (product.priceCents / 100).toFixed(2) : '',
-    category: (product.type as ProductFormState['category']) || 'Ring Dish',
+    category: normalizeCategoryValue(product.type || (product as any).category) || DEFAULT_CATEGORY_OPTIONS[0] || '',
     imageUrl: product.imageUrl,
     imageUrls: product.imageUrls ? product.imageUrls.join(',') : '',
     quantityAvailable: product.quantityAvailable ?? 1,
@@ -826,12 +827,14 @@ function formStateToPayload(state: ProductFormState) {
   const priceNumber = Number(state.price || 0);
   const parsedImages = parseImageUrls(state.imageUrls);
   const quantityAvailable = state.isOneOff ? 1 : Math.max(1, Number(state.quantityAvailable) || 1);
+  const category = normalizeCategoryValue(state.category) || DEFAULT_CATEGORY_OPTIONS[0] || 'Uncategorized';
 
   return {
     name: state.name.trim(),
     description: state.description.trim(),
     priceCents: Math.round(priceNumber * 100),
-    category: state.category,
+    category,
+    categories: category ? [category] : undefined,
     imageUrl: state.imageUrl.trim(),
     imageUrls: parsedImages,
     quantityAvailable,

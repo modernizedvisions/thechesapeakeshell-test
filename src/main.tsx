@@ -10,6 +10,7 @@ import { CheckoutPage } from './pages/CheckoutPage';
 import { CheckoutReturnPage } from './pages/CheckoutReturnPage';
 import { AdminPage } from './pages/AdminPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
+import { Toaster } from 'sonner';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -28,5 +29,6 @@ createRoot(document.getElementById('root')!).render(
         </Route>
       </Routes>
     </BrowserRouter>
+    <Toaster richColors position="top-center" />
   </StrictMode>
 );

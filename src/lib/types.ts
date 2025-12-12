@@ -8,6 +8,12 @@ export interface Product {
   imageUrl: string;
   thumbnailUrl?: string;
   type: string;
+  /**
+   * Optional category aliases for flexibility while we transition away from a fixed set.
+   * `type` remains the primary category field in most of the UI/API.
+   */
+  category?: string;
+  categories?: string[];
   collection?: string;
   oneoff: boolean;
   quantityAvailable?: number;
@@ -80,12 +86,23 @@ export interface HeroConfig {
   customOrdersImages?: CustomOrdersImage[]; // up to 4 for custom shells grid
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  imageUrl?: string;
+  heroImageUrl?: string;
+  showOnHomePage: boolean;
+}
+
 export type ShopCategoryTile = {
   id: string;
   label: string;
   ctaLabel: string;
   categorySlug: string;
   imageUrl: string;
+  slotIndex?: number;
+  categoryId?: string;
 };
 
 export interface Review {

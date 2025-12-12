@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Copy, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 interface AdminMessage {
   id: string;
@@ -77,15 +79,16 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
     setIsDialogOpen(true);
   };
 
-  const handleCreateOrder = () => {
-    if (!selectedMessage) return;
-    onCreateCustomOrderFromMessage({
-      customerName: selectedMessage.name,
-      customerEmail: selectedMessage.email,
-      description: selectedMessage.message,
-      messageId: selectedMessage.id,
-    });
+  const handleCloseDialog = () => {
     setIsDialogOpen(false);
+  };
+
+  const handleDeleteMessage = () => {
+    if (!selectedMessage) return;
+    setMessages((prev) => prev.filter((m) => m.id !== selectedMessage.id));
+    setSelectedMessage(null);
+    setIsDialogOpen(false);
+    toast.success('Message deleted from dashboard');
   };
 
   return (
@@ -155,11 +158,27 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
-          <div className="max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Message Details</DialogTitle>
-            </DialogHeader>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-900">Message Details</h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDeleteMessage}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-1"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseDialog}
+                className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+          </div>
 
+          <div className="max-h-[80vh] overflow-y-auto">
             {selectedMessage && (
               <div className="space-y-4">
                 <div>
@@ -168,7 +187,18 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase">Email</p>
-                  <p className="text-sm text-gray-900">{selectedMessage.email || '-'}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-gray-900">{selectedMessage.email || '-'}</p>
+                    {selectedMessage.email && (
+                      <Copy
+                        className="h-4 w-4 cursor-pointer text-neutral-500 hover:text-neutral-800 transition"
+                        onClick={() => {
+                          navigator.clipboard.writeText(selectedMessage.email);
+                          toast.success('Email copied to clipboard!');
+                        }}
+                      />
+                    )}
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase">Message</p>
@@ -197,23 +227,6 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
                     </div>
                   </div>
                 )}
-
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:border-gray-400"
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Close
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-                    onClick={handleCreateOrder}
-                  >
-                    Create Custom Order
-                  </button>
-                </div>
               </div>
             )}
           </div>

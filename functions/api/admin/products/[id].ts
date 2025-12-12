@@ -44,8 +44,6 @@ type UpdateProductInput = {
   collection?: string;
 };
 
-const ALLOWED_CATEGORIES = ['Ring Dish', 'Wine Stopper', 'Decor', 'Ornaments'];
-
 const mapRowToProduct = (row: ProductRow): Product => {
   const imageUrls = row.image_urls_json ? safeParseJsonArray(row.image_urls_json) : [];
   const primaryImage = row.image_url || imageUrls[0] || '';
@@ -60,6 +58,8 @@ const mapRowToProduct = (row: ProductRow): Product => {
     imageUrl: primaryImage,
     thumbnailUrl: primaryImage || undefined,
     type: row.category ?? 'General',
+    category: row.category ?? undefined,
+    categories: row.category ? [row.category] : undefined,
     collection: row.collection ?? undefined,
     oneoff: row.is_one_off === null ? true : row.is_one_off === 1,
     visible: row.is_active === null ? true : row.is_active === 1,
@@ -88,12 +88,14 @@ const toSlug = (value: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/(^-|-$)+/g, '');
 
+const sanitizeCategory = (value: string | undefined | null) => (value || '').trim();
+
 const validateUpdate = (input: UpdateProductInput) => {
   if (input.priceCents !== undefined && input.priceCents < 0) {
     return 'priceCents must be non-negative';
   }
-  if (input.category && !ALLOWED_CATEGORIES.includes(input.category)) {
-    return `category must be one of: ${ALLOWED_CATEGORIES.join(', ')}`;
+  if (input.category !== undefined && !sanitizeCategory(input.category)) {
+    return 'category cannot be empty';
   }
   return null;
 };
@@ -181,7 +183,10 @@ export async function onRequestPut(context: {
     if (body.name) addSet('slug = ?', toSlug(body.name));
     if (body.description !== undefined) addSet('description = ?', body.description);
     if (body.priceCents !== undefined) addSet('price_cents = ?', body.priceCents);
-    if (body.category !== undefined) addSet('category = ?', body.category);
+    if (body.category !== undefined) {
+      const categoryValue = sanitizeCategory(body.category);
+      addSet('category = ?', categoryValue || null);
+    }
     if (body.imageUrl !== undefined) addSet('image_url = ?', body.imageUrl);
     if (body.imageUrls !== undefined)
       addSet('image_urls_json = ?', body.imageUrls.length ? JSON.stringify(body.imageUrls) : null);

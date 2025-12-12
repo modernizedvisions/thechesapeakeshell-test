@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import { fetchHomeHeroConfig, fetchShopCategoryTiles } from '../lib/api';
-import { CustomOrdersImage, HeroCollageImage, ShopCategoryTile } from '../lib/types';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchCategories, fetchHomeHeroConfig, fetchShopCategoryTiles } from '../lib/api';
+import { Category, CustomOrdersImage, HeroCollageImage, ShopCategoryTile } from '../lib/types';
 import { ContactForm } from '../components/ContactForm';
 import { Link } from 'react-router-dom';
 import HomeHero from '../components/HomeHero';
@@ -93,20 +93,34 @@ const customShellCards = [
 ];
 
 export function HomePage() {
+  const [categories, setCategories] = useState<Category[]>([]);
   const [tiles, setTiles] = useState<ShopCategoryTile[]>([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [isLoadingTiles, setIsLoadingTiles] = useState(true);
   const [heroImages, setHeroImages] = useState<HeroCollageImage[]>([]);
   const [customOrderImages, setCustomOrderImages] = useState<CustomOrdersImage[]>([]);
 
   useEffect(() => {
-    loadCategoryTiles();
+    loadCategories();
+    loadTiles();
     loadHeroImages();
   }, []);
 
-  const loadCategoryTiles = async () => {
+  const loadCategories = async () => {
+    try {
+      const loaded = await fetchCategories();
+      setCategories(Array.isArray(loaded) ? loaded : []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    } finally {
+      setIsLoadingCategories(false);
+    }
+  };
+
+  const loadTiles = async () => {
     try {
       const loaded = await fetchShopCategoryTiles();
-      setTiles(loaded);
+      setTiles(Array.isArray(loaded) ? loaded : []);
     } catch (error) {
       console.error('Error loading category tiles:', error);
     } finally {
@@ -126,9 +140,30 @@ export function HomePage() {
     }
   };
 
-  // Helper to keep button text consistent with the new design without changing stored data
-  const getTileCta = (tile: ShopCategoryTile) =>
-    tile.ctaLabel?.replace(/^All\s+/i, 'Shop ') || `Shop ${tile.label}`;
+  const orderedTiles = useMemo(() => {
+    if (!tiles?.length) return [];
+    return [...tiles]
+      .map((tile, index) => ({
+        ...tile,
+        slotIndex: tile.slotIndex ?? index,
+        __index: index,
+      }))
+      .sort((a, b) => (a.slotIndex ?? a.__index) - (b.slotIndex ?? b.__index));
+  }, [tiles]);
+
+  const featuredCards = orderedTiles
+    .map((tile) => {
+      const byId = tile.categoryId ? categories.find((c) => c.id === tile.categoryId) : undefined;
+      const bySlug =
+        !byId && tile.categorySlug
+          ? categories.find((c) => (c.slug || '').toLowerCase() === tile.categorySlug.toLowerCase())
+          : undefined;
+      const category = byId || bySlug;
+      if (!category) return null;
+      return { slot: tile.slotIndex ?? 0, category, tile };
+    })
+    .filter(Boolean)
+    .slice(0, 4) as { slot: number; category: Category; tile: ShopCategoryTile }[];
 
   const handleScrollToContact = () => {
     const el = document.getElementById('contact');
@@ -149,44 +184,49 @@ export function HomePage() {
             Shop by Category
           </h2>
 
-          {isLoadingTiles ? (
+          {isLoadingCategories || isLoadingTiles ? (
             <div className="text-center py-12">
               <p className="text-gray-500 font-sans">Loading categories...</p>
             </div>
-          ) : (
+          ) : featuredCards.length ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                {tiles.map((tile) => (
-                  <Link
-                    key={tile.id}
-                    to={`/shop?type=${encodeURIComponent(tile.categorySlug)}`}
-                    className="group relative block w-full max-w-[340px] mx-auto overflow-hidden rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
-                  >
-                  <div className="aspect-[4/5] sm:aspect-square w-full bg-white border border-gray-200">
-                    {tile.imageUrl ? (
-                      <img
-                        src={tile.imageUrl}
-                        alt={tile.label}
-                        className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-102"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
-                        Image
+              <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-6">
+                {featuredCards.map(({ category, tile, slot }) => {
+                  const image =
+                    category.heroImageUrl ||
+                    category.imageUrl ||
+                    tile.imageUrl ||
+                    '/images/category-placeholder.jpg';
+                  return (
+                    <Link
+                      key={`${category.slug || category.id || slot}`}
+                      to={`/shop?type=${encodeURIComponent(category.slug || tile.categorySlug || '')}`}
+                      className="group relative block w-full overflow-hidden rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+                    >
+                      <div className="aspect-[4/5] sm:aspect-square w-full bg-white border border-gray-200">
+                        {image ? (
+                          <img
+                            src={image}
+                            alt={category.name}
+                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">
+                            Image
+                          </div>
+                        )}
                       </div>
-                      )}
-                    </div>
 
-                    {/* Soft gradient to lift the pill off the image */}
-                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/55 to-transparent" />
+                      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/55 to-transparent" />
 
-                    {/* Only visible label pill over the image */}
-                    <div className="absolute inset-x-0 bottom-4 flex justify-center">
-                      <span className="pointer-events-auto inline-flex items-center rounded-full bg-white px-6 py-2 text-sm font-medium text-gray-900 shadow-sm transition-colors group-hover:bg-gray-900 group-hover:text-white">
-                        {getTileCta(tile)}
-                      </span>
-                    </div>
-                  </Link>
-                ))}
+                      <div className="absolute inset-x-0 bottom-4 flex justify-center">
+                        <span className="pointer-events-auto inline-flex items-center rounded-full bg-white px-6 py-2 text-sm font-medium text-gray-900 shadow-sm transition-colors group-hover:bg-gray-900 group-hover:text-white">
+                          {`Shop ${category.name}`}
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
               </div>
 
               <div className="flex justify-center mt-10">
@@ -198,6 +238,10 @@ export function HomePage() {
                 </Link>
               </div>
             </>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-500 font-sans">No categories available yet.</p>
+            </div>
           )}
         </div>
       </section>
