@@ -106,17 +106,20 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Received</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Email</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Image</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Message</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Received</th>
                 <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
               {sortedMessages.map((msg) => (
                 <tr key={msg.id || `${msg.email}-${msg.createdAt}`}>
+                  <td className="px-4 py-2 text-sm text-gray-700">
+                    {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '-'}
+                  </td>
                   <td className="px-4 py-2 text-sm text-gray-900">{msg.name || 'Unknown'}</td>
                   <td className="px-4 py-2 text-sm text-gray-900">{msg.email || '-'}</td>
                   <td className="px-4 py-3">
@@ -134,9 +137,6 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
                     <span className="block max-w-[12rem] text-sm text-slate-700">
                       {truncateMessage(msg.message || '', 15) || '-'}
                     </span>
-                  </td>
-                  <td className="px-4 py-2 text-sm text-gray-700">
-                    {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : '-'}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
@@ -176,7 +176,7 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
             </div>
           </div>
 
-          <div className="max-h-[80vh] overflow-y-auto">
+          <div className="max-h-[80vh] overflow-y-auto overflow-x-hidden">
             {selectedMessage && (
               <div className="space-y-4">
                 <div>
@@ -200,7 +200,9 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
                 </div>
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase">Message</p>
-                  <p className="whitespace-pre-wrap text-sm text-gray-900">{selectedMessage.message || '-'}</p>
+                  <p className="whitespace-pre-wrap break-words text-sm text-gray-900">
+                    {selectedMessage.message || '-'}
+                  </p>
                 </div>
                 {selectedMessage.imageUrl && (
                   <div className="mt-4">

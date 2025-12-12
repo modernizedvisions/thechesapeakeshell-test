@@ -11,6 +11,7 @@ type D1Database = {
 
 type CustomOrderRow = {
   id: string;
+  display_custom_order_id?: string | null;
   customer_name: string | null;
   customer_email: string | null;
   description: string | null;
@@ -35,7 +36,7 @@ export async function onRequestGet(context: { env: { DB: D1Database } }): Promis
   try {
     await ensureCustomOrdersSchema(context.env.DB);
     const statement = context.env.DB.prepare(`
-      SELECT id, customer_name, customer_email, description, amount, message_id, status, payment_link, created_at
+      SELECT id, display_custom_order_id, customer_name, customer_email, description, amount, message_id, status, payment_link, created_at
       FROM custom_orders
       ORDER BY created_at DESC
     `);
@@ -59,12 +60,14 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
     const status = body.status === 'paid' ? 'paid' : 'pending';
+    const displayId = await generateDisplayCustomOrderId(context.env.DB);
 
     const stmt = context.env.DB.prepare(`
-      INSERT INTO custom_orders (id, customer_name, customer_email, description, amount, message_id, status, payment_link, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO custom_orders (id, display_custom_order_id, customer_name, customer_email, description, amount, message_id, status, payment_link, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id,
+      displayId,
       body.customerName.trim(),
       body.customerEmail.trim(),
       body.description.trim(),
@@ -82,7 +85,7 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
     }
 
     // TODO: Add Stripe payment link creation when wiring payments.
-    return jsonResponse({ success: true, id, createdAt });
+    return jsonResponse({ success: true, id, displayId, createdAt });
   } catch (err) {
     console.error('Failed to create custom order', err);
     return jsonResponse({ error: 'Failed to create custom order' }, 500);
@@ -159,6 +162,7 @@ export async function onRequestPatch(context: { env: { DB: D1Database }; request
 async function ensureCustomOrdersSchema(db: D1Database) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS custom_orders (
     id TEXT PRIMARY KEY,
+    display_custom_order_id TEXT,
     customer_name TEXT,
     customer_email TEXT,
     description TEXT,
@@ -168,11 +172,29 @@ async function ensureCustomOrdersSchema(db: D1Database) {
     payment_link TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );`).run();
+
+  await db.prepare(`CREATE TABLE IF NOT EXISTS custom_order_counters (
+    year INTEGER PRIMARY KEY,
+    counter INTEGER NOT NULL
+  );`).run();
+
+  const columns = await db.prepare(`PRAGMA table_info(custom_orders);`).all<{ name: string }>();
+  const hasDisplayId = (columns.results || []).some((col) => col.name === 'display_custom_order_id');
+  if (!hasDisplayId) {
+    await db.prepare(`ALTER TABLE custom_orders ADD COLUMN display_custom_order_id TEXT;`).run();
+  }
+
+  await db.prepare(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_orders_display_id ON custom_orders(display_custom_order_id);`
+  ).run();
+
+  await backfillDisplayCustomOrderIds(db);
 }
 
 function mapRow(row: CustomOrderRow) {
   return {
     id: row.id,
+    displayCustomOrderId: row.display_custom_order_id ?? '',
     customerName: row.customer_name ?? '',
     customerEmail: row.customer_email ?? '',
     description: row.description ?? '',
@@ -191,4 +213,75 @@ function jsonResponse(data: unknown, status = 200) {
       'content-type': 'application/json',
     },
   });
+}
+
+async function generateDisplayCustomOrderId(db: D1Database): Promise<string> {
+  const year = new Date().getFullYear() % 100;
+  await db.prepare('BEGIN IMMEDIATE TRANSACTION;').run();
+  try {
+    const existing = await db.prepare(`SELECT counter FROM custom_order_counters WHERE year = ?`).bind(year).first<{ counter: number }>();
+    let counter = 1;
+    if (existing?.counter) {
+      counter = existing.counter + 1;
+      await db.prepare(`UPDATE custom_order_counters SET counter = ? WHERE year = ?`).bind(counter, year).run();
+    } else {
+      await db.prepare(`INSERT INTO custom_order_counters (year, counter) VALUES (?, ?)`).bind(year, counter).run();
+    }
+    await db.prepare('COMMIT;').run();
+    const padded = String(counter).padStart(3, '0');
+    return `CO-${year}-${padded}`;
+  } catch (error) {
+    console.error('Failed to generate display custom order id', error);
+    await db.prepare('ROLLBACK;').run();
+    throw error;
+  }
+}
+
+async function backfillDisplayCustomOrderIds(db: D1Database) {
+  const missing = await db
+    .prepare(
+      `SELECT id, created_at FROM custom_orders WHERE display_custom_order_id IS NULL OR display_custom_order_id = '' ORDER BY datetime(created_at) ASC`
+    )
+    .all<{ id: string; created_at: string }>();
+
+  const rows = missing.results || [];
+  if (!rows.length) return;
+
+  const countersByYear = new Map<number, number>();
+  const existingCounters = await db.prepare(`SELECT year, counter FROM custom_order_counters`).all<{ year: number; counter: number }>();
+  (existingCounters.results || []).forEach((row) => countersByYear.set(row.year, row.counter));
+
+  await db.prepare('BEGIN IMMEDIATE TRANSACTION;').run();
+  try {
+    for (const row of rows) {
+      const yearFull = row.created_at ? new Date(row.created_at).getFullYear() : new Date().getFullYear();
+      const year = yearFull % 100;
+      const current = countersByYear.get(year) ?? 0;
+      const next = current + 1;
+      countersByYear.set(year, next);
+
+      const padded = String(next).padStart(3, '0');
+      const displayId = `CO-${year}-${padded}`;
+
+      await db
+        .prepare(`UPDATE custom_orders SET display_custom_order_id = ? WHERE id = ?`)
+        .bind(displayId, row.id)
+        .run();
+    }
+
+    for (const [year, counter] of countersByYear.entries()) {
+      const existing = await db.prepare(`SELECT counter FROM custom_order_counters WHERE year = ?`).bind(year).first<{ counter: number }>();
+      if (existing) {
+        await db.prepare(`UPDATE custom_order_counters SET counter = ? WHERE year = ?`).bind(counter, year).run();
+      } else {
+        await db.prepare(`INSERT INTO custom_order_counters (year, counter) VALUES (?, ?)`).bind(year, counter).run();
+      }
+    }
+
+    await db.prepare('COMMIT;').run();
+  } catch (error) {
+    console.error('Failed to backfill display custom order ids', error);
+    await db.prepare('ROLLBACK;').run();
+    throw error;
+  }
 }

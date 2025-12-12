@@ -7,6 +7,7 @@ export type AdminOrderItem = {
 
 export type AdminOrder = {
   id: string;
+  displayOrderId?: string | null;
   createdAt: string;
   totalCents: number;
   customerEmail: string | null;

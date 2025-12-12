@@ -59,8 +59,6 @@ const ProductAdminCard: React.FC<ProductAdminCardProps> = ({ product, onEdit, on
           type="button"
           onClick={() => {
             if (!product.id) return;
-            const confirmed = window.confirm('Delete this product? This cannot be undone.');
-            if (!confirmed) return;
             onDelete(product.id);
           }}
           className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1.5 text-slate-600 shadow hover:text-red-600 hover:shadow-md"
@@ -303,7 +301,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
     <div className="space-y-6">
       <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
         <AdminSectionHeader
-          title="Shop / Products"
+          title="Add Products"
           subtitle="Add, edit, and manage all products shown in the storefront."
         />
 
@@ -538,6 +536,12 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
       />
 
       <div className="mt-8">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <h3 className="text-sm font-semibold text-slate-900 tracking-[0.08em] uppercase">
+            Edit Current Products
+          </h3>
+          <div className="hidden" />
+        </div>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <input
             type="text"
@@ -565,10 +569,6 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
           </select>
         </div>
 
-        <h3 className="mb-3 text-sm font-semibold text-slate-900">
-          Current Products (Card View)
-        </h3>
-
         {isLoadingProducts && (
           <div className="mb-3 flex items-center gap-2 text-sm text-gray-500">
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -586,8 +586,6 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                 onStartEditProduct(p);
               }}
               onDelete={async (id) => {
-                const confirmed = window.confirm('Delete this product? This cannot be undone.');
-                if (!confirmed) return;
                 await onDeleteProduct(id);
               }}
             />
@@ -638,8 +636,6 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
               <button
                 type="button"
                 onClick={async () => {
-                  const confirmed = window.confirm('Delete this product? This cannot be undone.');
-                  if (!confirmed) return;
                   await onDeleteProduct(editProductId);
                   setIsEditModalOpen(false);
                 }}

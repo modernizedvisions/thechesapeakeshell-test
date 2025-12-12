@@ -9,6 +9,7 @@ type D1Database = {
 
 type OrderRow = {
   id: string;
+  display_order_id?: string | null;
   stripe_payment_intent_id: string | null;
   total_cents: number | null;
   customer_email: string | null;
@@ -34,7 +35,7 @@ export const onRequestGet = async (context: { env: { DB: D1Database } }): Promis
     // First try selecting card fields (may not exist in older schema).
     try {
       const ordersWithCardStmt = context.env.DB.prepare(
-        `SELECT id, stripe_payment_intent_id, total_cents, customer_email, shipping_name, shipping_address_json, card_last4, card_brand, created_at
+        `SELECT id, display_order_id, stripe_payment_intent_id, total_cents, customer_email, shipping_name, shipping_address_json, card_last4, card_brand, created_at
          FROM orders ORDER BY created_at DESC LIMIT 20;`
       );
       const res = await ordersWithCardStmt.all<OrderRow>();
@@ -71,6 +72,7 @@ export const onRequestGet = async (context: { env: { DB: D1Database } }): Promis
 
     const orders = (orderRows || []).map((o) => ({
       id: o.id,
+      displayOrderId: o.display_order_id ?? null,
       createdAt: o.created_at,
       totalCents: o.total_cents ?? 0,
       customerEmail: o.customer_email,

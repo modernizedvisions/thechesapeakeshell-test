@@ -97,7 +97,8 @@ export function AdminPage() {
     if (!q) return orders;
 
     return orders.filter((order) => {
-      const idMatch = order.id.toLowerCase().includes(q);
+      const idMatch =
+        (order.displayOrderId || order.id || '').toLowerCase().includes(q);
       const nameMatch = (order.customerName ?? '').toLowerCase().includes(q);
       const emailMatch = (order.customerEmail ?? '').toLowerCase().includes(q);
       const productMatch = order.items?.some((item) =>
@@ -674,7 +675,7 @@ export function AdminPage() {
 
           <div className="mb-4">
             <h2 className="text-lg font-semibold text-gray-900">
-              Order {selectedOrder.id}
+              Order {selectedOrder.displayOrderId || selectedOrder.id}
             </h2>
             <p className="text-xs text-gray-500">
               Placed on {new Date(selectedOrder.createdAt).toLocaleString()}

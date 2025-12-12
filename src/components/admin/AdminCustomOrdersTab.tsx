@@ -40,7 +40,6 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
     if (initialDraft) {
       reset(draftDefaults);
       setIsModalOpen(true);
-      // Consume the draft after it has been applied to defaults
       onDraftConsumed?.();
     }
   }, [initialDraft, draftDefaults, onDraftConsumed, reset]);
@@ -99,9 +98,10 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
                   const amount = typeof order.amount === 'number' ? order.amount : null;
                   const amountLabel = amount !== null ? `$${(amount / 100).toFixed(2)}` : '—';
                   const statusLabel = order.status || 'pending';
+                  const displayId = order.displayCustomOrderId || order.display_custom_order_id || order.id || '—';
                   return (
                     <tr key={order.id}>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-700">{order.id || '—'}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-700">{displayId}</td>
                       <td className="px-4 py-2">{order.customerName || 'Customer'}</td>
                       <td className="px-4 py-2">{order.customerEmail || '—'}</td>
                       <td className="px-4 py-2">{amountLabel}</td>
@@ -139,7 +139,7 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
                           type="button"
                           className="rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 opacity-60 cursor-not-allowed"
                           disabled
-                          title="Stripe payment link not yet configured — implement after Resend + Stripe step."
+                          title="Stripe payment link not yet configured; implement after Resend + Stripe step."
                         >
                           Send Payment Link
                         </button>
@@ -151,7 +151,6 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
             </table>
           </div>
         )}
-        {/* TODO: Enable payment link sending once Stripe/Resend integration is wired. */}
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
