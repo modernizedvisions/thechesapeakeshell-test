@@ -7,7 +7,7 @@ export interface AdminGalleryTabProps {
   images: GalleryImage[];
   onChange: (images: GalleryImage[]) => void;
   onSave: () => Promise<void>;
-  saveState: 'idle' | 'saving' | 'success';
+  saveState: 'idle' | 'saving' | 'success' | 'error';
   fileInputRef: React.RefObject<HTMLInputElement>;
   title?: string;
   description?: string;
@@ -33,7 +33,7 @@ interface GalleryAdminProps {
   images: GalleryImage[];
   onChange: (images: GalleryImage[]) => void;
   onSave: () => Promise<void>;
-  saveState: 'idle' | 'saving' | 'success';
+  saveState: 'idle' | 'saving' | 'success' | 'error';
   fileInputRef: React.RefObject<HTMLInputElement>;
   title?: string;
   description?: string;
@@ -47,7 +47,7 @@ function GalleryAdmin({
   saveState,
   fileInputRef,
   title = 'Gallery Management',
-  description = 'Add, hide, or remove manual gallery images.',
+  description = 'Add, hide, or remove gallery images.',
   maxImages,
 }: GalleryAdminProps) {
   const handleAddImages = (files: FileList | null) => {
@@ -61,12 +61,12 @@ function GalleryAdmin({
         reader.onload = () => {
           resolve({
             id: crypto.randomUUID(),
-            url: reader.result as string,
+            imageUrl: reader.result as string,
             alt: file.name,
-            isVisible: true,
+            hidden: false,
             createdAt: new Date().toISOString(),
-            order: images.length + 1,
-          });
+            position: images.length,
+          } as GalleryImage);
         };
         reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsDataURL(file);
@@ -88,7 +88,7 @@ function GalleryAdmin({
         img.id === id
           ? {
               ...img,
-              isVisible: !img.isVisible,
+              hidden: !img.hidden,
             }
           : img
       )
@@ -154,6 +154,12 @@ function GalleryAdmin({
             }}
           />
         </div>
+        <div className="mt-2 text-xs text-gray-600">
+          {saveState === 'saving' && 'Saving changes...'}
+          {saveState === 'success' && 'Gallery saved.'}
+          {saveState === 'error' && 'Save failed. Please retry.'}
+          {saveState === 'idle' && images.length === 0 && 'No images saved yet.'}
+        </div>
       </div>
 
       <div
@@ -172,7 +178,7 @@ function GalleryAdmin({
         {images.map((img, idx) => (
           <div key={img.id} className="relative group rounded-lg overflow-hidden border border-gray-200">
             <div className="aspect-square bg-gray-100">
-              <img src={img.url} alt={img.alt || `Gallery image ${idx + 1}`} className="w-full h-full object-cover" />
+              <img src={img.imageUrl} alt={img.alt || `Gallery image ${idx + 1}`} className="w-full h-full object-cover" />
             </div>
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="flex items-center justify-between text-white text-xs">
@@ -181,7 +187,7 @@ function GalleryAdmin({
                   onClick={() => handleToggleVisibility(img.id)}
                   className="inline-flex items-center gap-1 bg-white/10 px-2 py-1 rounded hover:bg-white/20"
                 >
-                  {img.isVisible ? (
+                  {!img.hidden ? (
                     <>
                       <Eye className="w-3 h-3" />
                       Visible

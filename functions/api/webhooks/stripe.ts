@@ -2,7 +2,9 @@ import Stripe from 'stripe';
 
 type D1PreparedStatement = {
   bind(...values: unknown[]): D1PreparedStatement;
-  run(): Promise<{ success: boolean; error?: string }>;
+  run(): Promise<{ success: boolean; error?: string; meta?: { changes?: number } }>;
+  all<T>(): Promise<{ results: T[] }>;
+  first<T>(): Promise<T | null>;
 };
 
 type D1Database = {
@@ -178,16 +180,19 @@ export const onRequestPost = async (context: {
 
       // Insert order + order_items (best effort; do not throw).
       try {
+        await ensureOrdersSchema(env.DB);
         const orderId = crypto.randomUUID();
+        const displayOrderId = await generateDisplayOrderId(env.DB);
         const insertWithCard = await env.DB.prepare(
           `
             INSERT INTO orders (
-              id, stripe_payment_intent_id, total_cents, customer_email, shipping_name, shipping_address_json, card_last4, card_brand
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+              id, display_order_id, stripe_payment_intent_id, total_cents, customer_email, shipping_name, shipping_address_json, card_last4, card_brand
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
           `
         )
           .bind(
             orderId,
+            displayOrderId,
             paymentIntentId,
             session.amount_total ?? 0,
             customerEmail,
@@ -205,12 +210,13 @@ export const onRequestPost = async (context: {
           const fallbackResult = await env.DB.prepare(
             `
               INSERT INTO orders (
-                id, stripe_payment_intent_id, total_cents, customer_email, shipping_name, shipping_address_json
-              ) VALUES (?, ?, ?, ?, ?, ?);
+                id, display_order_id, stripe_payment_intent_id, total_cents, customer_email, shipping_name, shipping_address_json
+              ) VALUES (?, ?, ?, ?, ?, ?, ?);
             `
           )
             .bind(
               orderId,
+              displayOrderId,
               paymentIntentId,
               session.amount_total ?? 0,
               customerEmail,
@@ -292,3 +298,98 @@ export const onRequestPost = async (context: {
     return new Response('Webhook handling failed', { status: 500 });
   }
 };
+
+async function ensureOrdersSchema(db: D1Database) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS order_counters (
+    year INTEGER PRIMARY KEY,
+    counter INTEGER NOT NULL
+  );`).run();
+
+  // Add display_order_id column if missing
+  const columns = await db.prepare(`PRAGMA table_info(orders);`).all<{ name: string }>();
+  const hasDisplay = (columns.results || []).some((c) => c.name === 'display_order_id');
+  if (!hasDisplay) {
+    await db.prepare(`ALTER TABLE orders ADD COLUMN display_order_id TEXT;`).run();
+  }
+
+  await db
+    .prepare(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_display_order_id ON orders(display_order_id);`
+    )
+    .run();
+
+  await backfillDisplayOrderIds(db);
+}
+
+async function generateDisplayOrderId(db: D1Database): Promise<string> {
+  const year = new Date().getFullYear() % 100;
+  await db.prepare('BEGIN IMMEDIATE TRANSACTION;').run();
+  try {
+    const existing = await db
+      .prepare(`SELECT counter FROM order_counters WHERE year = ?`)
+      .bind(year)
+      .first<{ counter: number }>();
+    let counter = 1;
+    if (existing?.counter) {
+      counter = existing.counter + 1;
+      await db.prepare(`UPDATE order_counters SET counter = ? WHERE year = ?`).bind(counter, year).run();
+    } else {
+      await db.prepare(`INSERT INTO order_counters (year, counter) VALUES (?, ?)`).bind(year, counter).run();
+    }
+    await db.prepare('COMMIT;').run();
+    const padded = String(counter).padStart(3, '0');
+    return `${year}-${padded}`;
+  } catch (error) {
+    console.error('Failed to generate display order id', error);
+    await db.prepare('ROLLBACK;').run();
+    throw error;
+  }
+}
+
+async function backfillDisplayOrderIds(db: D1Database) {
+  const missing = await db
+    .prepare(
+      `SELECT id, created_at FROM orders WHERE display_order_id IS NULL OR display_order_id = '' ORDER BY datetime(created_at) ASC`
+    )
+    .all<{ id: string; created_at: string }>();
+
+  const rows = missing.results || [];
+  if (!rows.length) return;
+
+  const countersByYear = new Map<number, number>();
+  const existingCounters = await db.prepare(`SELECT year, counter FROM order_counters`).all<{ year: number; counter: number }>();
+  (existingCounters.results || []).forEach((row) => countersByYear.set(row.year, row.counter));
+
+  await db.prepare('BEGIN IMMEDIATE TRANSACTION;').run();
+  try {
+    for (const row of rows) {
+      const yearFull = row.created_at ? new Date(row.created_at).getFullYear() : new Date().getFullYear();
+      const year = yearFull % 100;
+      const current = countersByYear.get(year) ?? 0;
+      const next = current + 1;
+      countersByYear.set(year, next);
+      const padded = String(next).padStart(3, '0');
+      const displayId = `${year}-${padded}`;
+
+      await db.prepare(`UPDATE orders SET display_order_id = ? WHERE id = ?`).bind(displayId, row.id).run();
+    }
+
+    for (const [year, counter] of countersByYear.entries()) {
+      const existing = await db
+        .prepare(`SELECT counter FROM order_counters WHERE year = ?`)
+        .bind(year)
+        .first<{ counter: number }>();
+      if (existing) {
+        await db.prepare(`UPDATE order_counters SET counter = ? WHERE year = ?`).bind(counter, year).run();
+      } else {
+        await db.prepare(`INSERT INTO order_counters (year, counter) VALUES (?, ?)`).bind(year, counter).run();
+      }
+    }
+
+    await db.prepare('COMMIT;').run();
+  } catch (error) {
+    console.error('Failed to backfill display order ids', error);
+    await db.prepare('ROLLBACK;').run();
+    throw error;
+  }
+}

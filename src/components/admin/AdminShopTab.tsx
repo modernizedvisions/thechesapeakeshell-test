@@ -97,16 +97,12 @@ const ProductAdminCard: React.FC<ProductAdminCardProps> = ({ product, onEdit, on
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-          {quantity !== undefined && (
-            <span>Qty: {quantity}</span>
-          )}
-          {isOneOff && (
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-              One-off
-            </span>
-          )}
           {isActive !== undefined && (
-            <span className="rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700">
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                isActive ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+              }`}
+            >
               {isActive ? 'Active' : 'Inactive'}
             </span>
           )}
@@ -125,7 +121,7 @@ const ProductAdminCard: React.FC<ProductAdminCardProps> = ({ product, onEdit, on
 };
 
 export interface AdminShopTabProps {
-  productMessage: string;
+  productStatus: { type: 'success' | 'error' | null; message: string };
   productForm: ProductFormState;
   productImages: ManagedImage[];
   editProductImages: ManagedImage[];
@@ -154,7 +150,7 @@ export interface AdminShopTabProps {
 }
 
 export const AdminShopTab: React.FC<AdminShopTabProps> = ({
-  productMessage,
+  productStatus,
   productForm,
   productImages,
   editProductImages,
@@ -305,12 +301,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
           subtitle="Add, edit, and manage all products shown in the storefront."
         />
 
-        {productMessage && (
-          <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-700">
-            {productMessage}
-          </div>
-        )}
-
+        <div className="relative">
         <form onSubmit={onCreateProduct} className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)] gap-8">
             <section className="space-y-3">
@@ -335,20 +326,74 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Price (USD)</label>
-                  <input
-                    required
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={productForm.price}
-                    onChange={(e) => onProductFormChange('price', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                  />
+              <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-4 md:gap-6">
+                <div className="flex flex-col gap-4 h-full">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                      <input
+                        required
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={productForm.price}
+                        onChange={(e) => onProductFormChange('price', e.target.value)}
+                        placeholder="0.00"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Qty</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={productForm.quantityAvailable}
+                        onChange={(e) => onProductFormChange('quantityAvailable', Number(e.target.value))}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                        disabled={productForm.isOneOff}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-4 items-center">
+                    <ToggleSwitch
+                      label="One-off piece"
+                      checked={productForm.isOneOff}
+                      onChange={(val) => onProductFormChange('isOneOff', val)}
+                    />
+                    <ToggleSwitch
+                      label="Active (visible)"
+                      checked={productForm.isActive}
+                      onChange={(val) => onProductFormChange('isActive', val)}
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-2 md:mt-auto">
+                    <button
+                      type="submit"
+                      disabled={productSaveState === 'saving'}
+                      className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
+                    >
+                      {productSaveState === 'saving' ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-gray-200" />
+                          <span>Saving...</span>
+                        </span>
+                      ) : (
+                        'Save Product'
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onResetProductForm}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:border-gray-400"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
-                <div>
+
+                <div className="flex flex-col h-full">
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-sm font-medium text-slate-700">
                       Categories
@@ -386,58 +431,6 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                     )}
                   </div>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Quantity Available</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={productForm.quantityAvailable}
-                    onChange={(e) => onProductFormChange('quantityAvailable', Number(e.target.value))}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-                    disabled={productForm.isOneOff}
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-4 items-center pt-2">
-                <ToggleSwitch
-                  label="One-off piece"
-                  description="Defaults to one-of-a-kind"
-                  checked={productForm.isOneOff}
-                  onChange={(val) => onProductFormChange('isOneOff', val)}
-                />
-                <ToggleSwitch
-                  label="Active (visible)"
-                  checked={productForm.isActive}
-                  onChange={(val) => onProductFormChange('isActive', val)}
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  disabled={productSaveState === 'saving'}
-                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
-                >
-                  {productSaveState === 'saving' ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-gray-200" />
-                      <span>Saving...</span>
-                    </span>
-                  ) : (
-                    'Save Product'
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={onResetProductForm}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:border-gray-400"
-                >
-                  Clear
-                </button>
               </div>
             </section>
 
@@ -526,6 +519,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
           </div>
         </form>
       </div>
+    </div>
 
       <CategoryManagementModal
         open={isCategoryModalOpen}
@@ -592,41 +586,6 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
           ))}
         </div>
       </div>
-
-      {editProductId && (
-        <div className="bg-white rounded-lg shadow-sm border border-dashed border-gray-200 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h4 className="text-sm font-semibold text-gray-900">Edit Images</h4>
-              <p className="text-xs text-gray-600">Upload, reorder, and set a primary image.</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => editProductImageFileInputRef.current?.click()}
-              className="text-sm text-gray-700 underline"
-            >
-              Upload images
-            </button>
-            <input
-              ref={editProductImageFileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                onAddEditProductImages(e.target.files);
-                if (editProductImageFileInputRef.current) editProductImageFileInputRef.current.value = '';
-              }}
-            />
-          </div>
-          <ManagedImagesList
-            images={editProductImages}
-            onSetPrimary={onSetPrimaryEditImage}
-            onMove={onMoveEditImage}
-            onRemove={onRemoveEditImage}
-          />
-        </div>
-      )}
 
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent>
@@ -825,6 +784,17 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
           </form>
         </DialogContent>
       </Dialog>
+      {productStatus.type && (
+        <div className="pointer-events-none absolute left-1/2 bottom-4 z-20 -translate-x-1/2">
+          <div
+            className={`pointer-events-auto rounded-full px-4 py-2 text-sm shadow-md ${
+              productStatus.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-emerald-100 text-emerald-800'
+            }`}
+          >
+            {productStatus.message}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

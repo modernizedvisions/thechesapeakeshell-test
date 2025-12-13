@@ -64,7 +64,9 @@ export interface GalleryImage {
   id: string;
   imageUrl: string;
   hidden: boolean;
+  alt?: string;
   title?: string;
+  position?: number;
   createdAt?: string;
 }
 

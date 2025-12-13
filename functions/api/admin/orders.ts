@@ -1,6 +1,8 @@
 type D1PreparedStatement = {
   all<T>(): Promise<{ results: T[] }>;
   bind(...values: unknown[]): D1PreparedStatement;
+  first<T>(): Promise<T | null>;
+  run(): Promise<{ success: boolean; error?: string; meta?: { changes?: number } }>;
 };
 
 type D1Database = {
@@ -31,6 +33,7 @@ type OrderItemRow = {
 
 export const onRequestGet = async (context: { env: { DB: D1Database } }): Promise<Response> => {
   try {
+    await ensureOrdersSchema(context.env.DB);
     let orderRows: OrderRow[] = [];
     // First try selecting card fields (may not exist in older schema).
     try {
@@ -112,5 +115,72 @@ function safeParseAddress(jsonString: string | null): Record<string, string | nu
     return null;
   } catch {
     return null;
+  }
+}
+
+async function ensureOrdersSchema(db: D1Database) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS order_counters (
+    year INTEGER PRIMARY KEY,
+    counter INTEGER NOT NULL
+  );`).run();
+
+  const columns = await db.prepare(`PRAGMA table_info(orders);`).all<{ name: string }>();
+  const hasDisplay = (columns.results || []).some((c) => c.name === 'display_order_id');
+  if (!hasDisplay) {
+    await db.prepare(`ALTER TABLE orders ADD COLUMN display_order_id TEXT;`).run();
+  }
+
+  await db
+    .prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_display_order_id ON orders(display_order_id);`)
+    .run();
+
+  await backfillDisplayOrderIds(db);
+}
+
+async function backfillDisplayOrderIds(db: D1Database) {
+  const missing = await db
+    .prepare(
+      `SELECT id, created_at FROM orders WHERE display_order_id IS NULL OR display_order_id = '' ORDER BY datetime(created_at) ASC`
+    )
+    .all<{ id: string; created_at: string }>();
+
+  const rows = missing.results || [];
+  if (!rows.length) return;
+
+  const countersByYear = new Map<number, number>();
+  const existingCounters = await db.prepare(`SELECT year, counter FROM order_counters`).all<{ year: number; counter: number }>();
+  (existingCounters.results || []).forEach((row) => countersByYear.set(row.year, row.counter));
+
+  await db.prepare('BEGIN IMMEDIATE TRANSACTION;').run();
+  try {
+    for (const row of rows) {
+      const yearFull = row.created_at ? new Date(row.created_at).getFullYear() : new Date().getFullYear();
+      const year = yearFull % 100;
+      const current = countersByYear.get(year) ?? 0;
+      const next = current + 1;
+      countersByYear.set(year, next);
+      const padded = String(next).padStart(3, '0');
+      const displayId = `${year}-${padded}`;
+
+      await db.prepare(`UPDATE orders SET display_order_id = ? WHERE id = ?`).bind(displayId, row.id).run();
+    }
+
+    for (const [year, counter] of countersByYear.entries()) {
+      const existing = await db
+        .prepare(`SELECT counter FROM order_counters WHERE year = ?`)
+        .bind(year)
+        .first<{ counter: number }>();
+      if (existing) {
+        await db.prepare(`UPDATE order_counters SET counter = ? WHERE year = ?`).bind(counter, year).run();
+      } else {
+        await db.prepare(`INSERT INTO order_counters (year, counter) VALUES (?, ?)`).bind(year, counter).run();
+      }
+    }
+
+    await db.prepare('COMMIT;').run();
+  } catch (error) {
+    console.error('Failed to backfill display order ids', error);
+    await db.prepare('ROLLBACK;').run();
+    throw error;
   }
 }

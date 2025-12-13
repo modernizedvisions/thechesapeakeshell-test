@@ -60,16 +60,17 @@ export function ProductDetailPage() {
     setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
+  const hasPrice = product?.priceCents !== undefined && product?.priceCents !== null;
   const isSold = product?.isSold || (product?.quantityAvailable !== undefined && (product.quantityAvailable ?? 0) <= 0);
-  const canPurchase = !!product && !!product.priceCents && !isSold;
+  const canPurchase = !!product && hasPrice && !isSold;
 
   const handleAddToCart = () => {
-    if (!product || !product.priceCents || isSold) return;
+    if (!product || !hasPrice || isSold) return;
     if (product.oneoff && isOneOffInCart(product.id)) return;
     addItem({
       productId: product.id,
       name: product.name,
-      priceCents: product.priceCents,
+      priceCents: product.priceCents ?? 0,
       quantity: 1,
       imageUrl: product.thumbnailUrl || product.imageUrl,
       oneoff: product.oneoff,

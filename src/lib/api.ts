@@ -11,9 +11,7 @@ import {
   deleteAdminProduct,
 } from './db/adminProducts';
 import {
-  getGalleryImages,
   getHomeHeroConfig,
-  saveGalleryImages as persistGalleryImages,
   saveHomeHeroConfig as persistHomeHeroConfig,
   fetchShopCategoryTiles as loadShopCategoryTiles,
   saveShopCategoryTiles as persistShopCategoryTiles,
@@ -37,8 +35,6 @@ export const adminFetchProducts = fetchAdminProducts;
 export const adminCreateProduct = createAdminProduct;
 export const adminUpdateProduct = updateAdminProduct;
 export const adminDeleteProduct = deleteAdminProduct;
-export const fetchGalleryImages = getGalleryImages;
-export const saveGalleryImages = persistGalleryImages;
 export const fetchHomeHeroConfig = getHomeHeroConfig;
 export const saveHomeHeroConfig = persistHomeHeroConfig;
 export const fetchShopCategoryTiles = loadShopCategoryTiles;
@@ -47,6 +43,36 @@ export const fetchReviewsForProduct = getReviewsForProduct;
 // validateCart is no longer exported here (orders/cart validation will be wired separately if needed)
 
 export { createEmbeddedCheckoutSession, fetchCheckoutSession, sendContactEmail, verifyAdminPassword };
+
+export async function fetchGalleryImages() {
+  const response = await fetch('/api/gallery', {
+    headers: { Accept: 'application/json' },
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`Gallery API responded with ${response.status}`);
+  const data = await response.json();
+  if (!Array.isArray(data.images)) return [];
+  return data.images.map((img: any, idx: number) => ({
+    id: img.id || `gallery-${idx}`,
+    imageUrl: img.imageUrl || img.image_url || '',
+    hidden: !!(img.hidden ?? img.is_active === 0),
+    alt: img.alt || img.alt_text,
+    title: img.title || img.alt || img.alt_text,
+    position: typeof img.position === 'number' ? img.position : idx,
+    createdAt: img.createdAt || img.created_at,
+  }));
+}
+
+export async function saveGalleryImages(images: any[]) {
+  const response = await fetch('/api/gallery', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ images }),
+  });
+  if (!response.ok) throw new Error(`Save gallery API responded with ${response.status}`);
+  const data = await response.json();
+  return Array.isArray(data.images) ? data.images : [];
+}
 
 export async function fetchCategories(): Promise<Category[]> {
   try {

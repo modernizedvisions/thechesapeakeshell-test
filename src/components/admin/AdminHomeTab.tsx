@@ -37,7 +37,7 @@ export function AdminHomeTab({
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-12">
       <HeroCollageAdmin images={heroImages} onChange={onHeroChange} onSave={onSaveHeroConfig} saveState={homeSaveState} />
 
       <CustomOrdersImagesAdmin
@@ -105,8 +105,8 @@ function HeroCollageAdmin({ images, onChange, onSave, saveState }: HeroCollageAd
     <section className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
       <div className="space-y-2">
         <AdminSectionHeader
-          title="Hero Collage Images"
-          subtitle="These three images appear in the floating collage on the homepage hero."
+          title="Hero Images"
+          subtitle="main images on your site"
         />
         <div className="flex justify-center sm:justify-end">
           <button
@@ -131,7 +131,7 @@ function HeroCollageAdmin({ images, onChange, onSave, saveState }: HeroCollageAd
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {slots.map((slot) => {
           const image = images[slot];
           const inputId = `hero-collage-${slot}`;
@@ -164,7 +164,7 @@ function HeroCollageAdmin({ images, onChange, onSave, saveState }: HeroCollageAd
                 </div>
               </div>
 
-              <div className="aspect-[4/5] rounded-md border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
+              <div className="aspect-[3/4] rounded-md border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
                 {image?.imageUrl ? (
                   <img src={image.imageUrl} alt={image.alt || `Hero image ${slot + 1}`} className="h-full w-full object-cover" />
                 ) : (
@@ -240,15 +240,6 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
     reader.readAsDataURL(file);
   };
 
-  const handleAltChange = (index: number, alt: string) => {
-    const next = [...images];
-    if (!next[index]) {
-      next[index] = { imageUrl: '' };
-    }
-    next[index] = { ...next[index], alt };
-    onChange(next.slice(0, 4));
-  };
-
   const handleRemove = (index: number) => {
     const next = [...images];
     next.splice(index, 1);
@@ -259,8 +250,8 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
     <section className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
       <div className="space-y-2">
         <AdminSectionHeader
-          title="Custom Shell Orders Images"
-          subtitle="Images that appear next to the Custom Shell Orders section on the home page."
+          title="Custom Orders"
+          subtitle="images shown beside the custom orders section."
         />
         <div className="flex justify-center sm:justify-end">
           <button
@@ -327,22 +318,6 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
                     <span>Drop or upload</span>
                   </div>
                 )}
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor={`${inputId}-alt`} className="text-xs font-medium text-slate-700">
-                  Alt text / description
-                </label>
-                <input
-                  id={`${inputId}-alt`}
-                  type="text"
-                  value={image?.alt || ''}
-                  onChange={(e) => {
-                    handleAltChange(slot, e.target.value);
-                  }}
-                  placeholder="Optional description"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
-                />
               </div>
 
               <input

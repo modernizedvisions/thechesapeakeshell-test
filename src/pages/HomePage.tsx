@@ -4,6 +4,8 @@ import { Category, CustomOrdersImage, HeroCollageImage, ShopCategoryTile } from 
 import { ContactForm } from '../components/ContactForm';
 import { Link } from 'react-router-dom';
 import HomeHero from '../components/HomeHero';
+import { TikTokEmbed } from '../components/TikTokEmbed';
+import { WaveDivider } from '../components/WaveDivider';
 
 function TikTokProfileCard() {
   return (
@@ -97,8 +99,8 @@ export function HomePage() {
   const [tiles, setTiles] = useState<ShopCategoryTile[]>([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
   const [isLoadingTiles, setIsLoadingTiles] = useState(true);
-  const [heroImages, setHeroImages] = useState<HeroCollageImage[]>([]);
   const [customOrderImages, setCustomOrderImages] = useState<CustomOrdersImage[]>([]);
+  const [heroImages, setHeroImages] = useState<HeroCollageImage[]>([]);
 
   useEffect(() => {
     loadCategories();
@@ -131,8 +133,8 @@ export function HomePage() {
   const loadHeroImages = async () => {
     try {
       const config = await fetchHomeHeroConfig();
-      setHeroImages((config.heroImages || []).slice(0, 3));
       setCustomOrderImages((config.customOrdersImages || []).slice(0, 4));
+      setHeroImages((config.heroImages || []).slice(0, 1));
     } catch (error) {
       console.error('Error loading hero images:', error);
     } finally {
@@ -173,16 +175,18 @@ export function HomePage() {
   };
 
   const customImagesToShow = customOrderImages.length ? customOrderImages : fallbackCustomShellImages;
+  const followBg = 'var(--follow-bg, #f1f5f9)';
 
   return (
     <div className="bg-white">
-      <HomeHero images={heroImages} />
+      <HomeHero heroImages={heroImages} />
 
-      <section className="py-16 bg-white">
+      <section className="pt-0 pb-16 bg-white">
+        <WaveDivider direction="down" fill="#ffffff" className="bg-[#F6F1E7]" />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl font-serif font-semibold text-gray-900 mb-8 text-center">
-            Shop by Category
-          </h2>
+            <h2 className="text-3xl font-serif font-semibold text-gray-900 mb-8 text-center">
+              SHOP THE COLLECTION
+            </h2>
 
           {isLoadingCategories || isLoadingTiles ? (
             <div className="text-center py-12">
@@ -249,7 +253,7 @@ export function HomePage() {
       <section className="w-full bg-white py-16 md:py-20">
         <div className="mx-auto max-w-6xl px-4">
           <div className="text-center mb-10 md:mb-12">
-            <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">Custom Orders</h2>
+            <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">CUSTOM ORDERS</h2>
             <p className="mt-3 text-sm md:text-base text-slate-600 max-w-2xl mx-auto">
               Have something specific in mind? From wedding parties to special dates and colors, I’m happy to create custom oyster shell pieces that feel personal to you — or to someone you love.
             </p>
@@ -305,10 +309,14 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="w-full bg-slate-50/80 py-16 md:py-20">
+      <section
+        className="w-full pt-0 pb-16 md:pb-20"
+        style={{ backgroundColor: followBg }}
+      >
+        <WaveDivider direction="down" fill={followBg} className="-mt-px -mb-px" />
         <div className="mx-auto max-w-6xl px-4">
           <div className="text-center mb-6">
-            <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">Follow Along</h2>
+            <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">FOLLOW ALONG</h2>
             <p className="mt-3 text-sm md:text-base text-slate-600 max-w-xl mx-auto">
               See new pieces and find out where I’ll be for craft shows and pop-ups — follow on social to stay up to date.
             </p>
@@ -351,11 +359,10 @@ export function HomePage() {
           </div>
 
           <div className="mb-10 flex justify-center">
-            <div className="w-full max-w-4xl rounded-2xl border border-slate-200 shadow-lg bg-white overflow-hidden">
-              <img
-                src="/images/popup-setup.jpg"
-                alt="Craft show popup booth with Chesapeake Shell artwork"
-                className="w-full h-auto object-contain"
+            <div className="w-full max-w-4xl rounded-2xl border border-slate-200 shadow-lg bg-white overflow-hidden p-4">
+              <TikTokEmbed
+                videoId="7582267436842487070"
+                citeUrl="https://www.tiktok.com/@thechesapeakeshell/video/7582267436842487070"
               />
             </div>
           </div>

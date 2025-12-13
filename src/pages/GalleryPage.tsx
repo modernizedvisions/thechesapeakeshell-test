@@ -1,28 +1,29 @@
 import { useEffect, useState } from 'react';
-import { fetchGalleryImages, fetchSoldProducts } from '../lib/api';
-import { GalleryImage, Product } from '../lib/types';
+import { fetchSoldProducts } from '../lib/api';
+import { Product } from '../lib/types';
+import { useGalleryImages } from '../lib/hooks/useGalleryImages';
 
 export function GalleryPage() {
-  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [soldProducts, setSoldProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingSold, setIsLoadingSold] = useState(true);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const { images: galleryImages, isLoading: isLoadingGallery } = useGalleryImages();
 
   useEffect(() => {
-    loadData();
+    const loadSold = async () => {
+      try {
+        const sold = await fetchSoldProducts();
+        setSoldProducts(sold);
+      } catch (error) {
+        console.error('Error loading gallery data:', error);
+      } finally {
+        setIsLoadingSold(false);
+      }
+    };
+    loadSold();
   }, []);
 
-  const loadData = async () => {
-    try {
-      const [gallery, sold] = await Promise.all([fetchGalleryImages(), fetchSoldProducts()]);
-      setGalleryImages(gallery.filter((img) => !img.hidden));
-      setSoldProducts(sold);
-    } catch (error) {
-      console.error('Error loading gallery data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const isLoading = isLoadingGallery || isLoadingSold;
 
   return (
     <div className="py-12 bg-gray-50 min-h-screen">
@@ -58,11 +59,6 @@ export function GalleryPage() {
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
                       </div>
-                      {item.title && (
-                        <div className="mt-2">
-                          <h3 className="font-medium text-gray-900">{item.title}</h3>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>

@@ -75,11 +75,11 @@ export function AdminPage() {
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [heroConfig, setHeroConfig] = useState<HeroConfig>({ heroImages: [], customOrdersImages: [] });
-  const [activeTab, setActiveTab] = useState<'orders' | 'sold' | 'gallery' | 'home' | 'shop' | 'messages' | 'customOrders'>('orders');
-  const [gallerySaveState, setGallerySaveState] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [activeTab, setActiveTab] = useState<'orders' | 'shop' | 'messages' | 'customOrders' | 'images' | 'sold'>('orders');
+  const [gallerySaveState, setGallerySaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [homeSaveState, setHomeSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
   const [productSaveState, setProductSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
-  const [productMessage, setProductMessage] = useState<string>('');
+  const [productStatus, setProductStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
   const [productForm, setProductForm] = useState<ProductFormState>(initialProductForm);
   const [editProductId, setEditProductId] = useState<string | null>(null);
   const [editProductForm, setEditProductForm] = useState<ProductFormState | null>(null);
@@ -191,7 +191,7 @@ export function AdminPage() {
       setAdminProducts(data);
     } catch (err) {
       console.error('Failed to load admin products', err);
-      setProductMessage('Could not load products. Showing latest known list.');
+      setProductStatus({ type: 'error', message: 'Could not load products.' });
     } finally {
       setIsLoadingProducts(false);
     }
@@ -359,11 +359,19 @@ export function AdminPage() {
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     setProductSaveState('saving');
-    setProductMessage('');
+    setProductStatus({ type: null, message: '' });
 
     try {
+      const hasAtLeastOneImage = Array.isArray(productImages) && productImages.length > 0;
+      if (!hasAtLeastOneImage) {
+        setProductStatus({ type: 'error', message: 'Add an image to save a product.' });
+        setProductSaveState('error');
+        setTimeout(() => setProductSaveState('idle'), 1500);
+        return;
+      }
+
       const manualUrls = mergeManualImages(productForm);
-      const uploaded = productImages.length > 0 ? await resolveImageUrls(productImages) : manualUrls;
+      const uploaded = await resolveImageUrls(productImages);
       const mergedImages = mergeImages(uploaded, manualUrls);
 
       const payload = {
@@ -374,7 +382,7 @@ export function AdminPage() {
 
       const created = await adminCreateProduct(payload);
       if (created) {
-        setProductMessage('Product created.');
+        setProductStatus({ type: 'success', message: 'Product saved successfully.' });
         resetProductForm();
         setProductImages([]);
         await loadAdminProducts();
@@ -382,10 +390,11 @@ export function AdminPage() {
         setTimeout(() => setProductSaveState('idle'), 1500);
       } else {
         setProductSaveState('error');
+        setProductStatus({ type: 'error', message: 'Please fill out all required fields.' });
       }
     } catch (err) {
       console.error('Create product failed', err);
-      setProductMessage('Create failed. Please check inputs.');
+      setProductStatus({ type: 'error', message: 'Please fill out all required fields.' });
       setProductSaveState('error');
       setTimeout(() => setProductSaveState('idle'), 1500);
     }
@@ -422,7 +431,7 @@ export function AdminPage() {
       }
     } catch (err) {
       console.error('Update product failed', err);
-      setProductMessage('Update failed. Please try again.');
+      setProductStatus({ type: 'error', message: 'Update failed. Please try again.' });
       setProductSaveState('error');
       setTimeout(() => setProductSaveState('idle'), 1500);
     }
@@ -434,9 +443,17 @@ export function AdminPage() {
       await loadAdminProducts();
     } catch (err) {
       console.error('Delete product failed', err);
-      setProductMessage('Delete failed.');
+      setProductStatus({ type: 'error', message: 'Delete failed.' });
     }
   };
+
+  useEffect(() => {
+    if (!productStatus.type) return;
+    const timeout = setTimeout(() => {
+      setProductStatus({ type: null, message: '' });
+    }, 3000);
+    return () => clearTimeout(timeout);
+  }, [productStatus]);
 
   if (!isAuthenticated) {
     return (
@@ -492,7 +509,7 @@ export function AdminPage() {
         </div>
 
         <div className="mb-6 border-b border-gray-200">
-          <nav className="flex gap-4">
+          <nav className="flex gap-4 justify-center">
             <button
               onClick={() => setActiveTab('orders')}
               className={`px-4 py-2 font-medium border-b-2 transition-colors ${
@@ -504,41 +521,11 @@ export function AdminPage() {
               Orders
             </button>
             <button
-              onClick={() => setActiveTab('sold')}
-              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-                activeTab === 'sold'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Sold Products
-            </button>
-            <button
-              onClick={() => setActiveTab('gallery')}
-              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-                activeTab === 'gallery'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Gallery
-            </button>
-            <button
-              onClick={() => setActiveTab('home')}
-              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
-                activeTab === 'home'
-                  ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Home Page
-            </button>
-            <button
               onClick={() => setActiveTab('shop')}
               className={`px-4 py-2 font-medium border-b-2 transition-colors ${
                 activeTab === 'shop'
                   ? 'border-gray-900 text-gray-900'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
               Shop
@@ -559,9 +546,29 @@ export function AdminPage() {
                 activeTab === 'customOrders'
                   ? 'border-gray-900 text-gray-900'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Custom Orders
+          </button>
+          <button
+            onClick={() => setActiveTab('images')}
+            className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+              activeTab === 'images'
+                ? 'border-gray-900 text-gray-900'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+            >
+              Images
+            </button>
+            <button
+              onClick={() => setActiveTab('sold')}
+              className={`px-4 py-2 font-medium border-b-2 transition-colors ${
+                activeTab === 'sold'
+                  ? 'border-gray-900 text-gray-900'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
             >
-              Custom Orders
+              Sold Products
             </button>
           </nav>
         </div>
@@ -577,42 +584,9 @@ export function AdminPage() {
 
         {activeTab === 'sold' && <AdminSoldTab soldProducts={soldProducts} />}
 
-        {activeTab === 'gallery' && (
-          <AdminGalleryTab
-            images={galleryImages}
-            onChange={setGalleryImages}
-            onSave={async () => {
-              setGallerySaveState('saving');
-              try {
-                await saveGalleryImages(galleryImages);
-                setGallerySaveState('success');
-                setTimeout(() => setGallerySaveState('idle'), 1500);
-              } catch (err) {
-                console.error('Failed to save gallery images', err);
-                setGallerySaveState('idle');
-              }
-            }}
-            saveState={gallerySaveState}
-            fileInputRef={fileInputRef}
-            title="Gallery Management"
-            description="Add, hide, or remove manual gallery images."
-          />
-        )}
-
-        {activeTab === 'home' && (
-          <AdminHomeTab
-            heroImages={heroConfig.heroImages || []}
-            customOrdersImages={heroConfig.customOrdersImages || []}
-            onHeroChange={(images) => setHeroConfig((prev) => ({ ...prev, heroImages: images }))}
-            onCustomOrdersChange={(images) => setHeroConfig((prev) => ({ ...prev, customOrdersImages: images }))}
-            onSaveHeroConfig={handleSaveHeroConfig}
-            homeSaveState={homeSaveState}
-          />
-        )}
-
         {activeTab === 'shop' && (
           <AdminShopTab
-            productMessage={productMessage}
+            productStatus={productStatus}
             productForm={productForm}
             productImages={productImages}
             editProductImages={editProductImages}
@@ -658,6 +632,45 @@ export function AdminPage() {
             initialDraft={customOrderDraft}
             onDraftConsumed={() => setCustomOrderDraft(null)}
           />
+        )}
+
+        {activeTab === 'images' && (
+          <div className="space-y-10">
+            <AdminHomeTab
+              heroImages={heroConfig.heroImages || []}
+              customOrdersImages={heroConfig.customOrdersImages || []}
+              onHeroChange={(images) => setHeroConfig((prev) => ({ ...prev, heroImages: images }))}
+              onCustomOrdersChange={(images) => setHeroConfig((prev) => ({ ...prev, customOrdersImages: images }))}
+              onSaveHeroConfig={handleSaveHeroConfig}
+              homeSaveState={homeSaveState}
+            />
+
+            <AdminGalleryTab
+              images={galleryImages}
+              onChange={setGalleryImages}
+              onSave={async () => {
+                setGallerySaveState('saving');
+                try {
+                  const normalized = galleryImages.map((img, idx) => ({
+                    ...img,
+                    position: idx,
+                    hidden: !!img.hidden,
+                  }));
+                  const saved = await saveGalleryImages(normalized);
+                  setGalleryImages(saved);
+                  setGallerySaveState('success');
+                  setTimeout(() => setGallerySaveState('idle'), 1500);
+                } catch (err) {
+                  console.error('Failed to save gallery images', err);
+                  setGallerySaveState('error');
+                }
+              }}
+              saveState={gallerySaveState}
+              fileInputRef={fileInputRef}
+              title="Gallery Management"
+              description="Add, hide, or remove gallery images."
+            />
+          </div>
         )}
       </div>
     </div>

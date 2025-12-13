@@ -145,8 +145,8 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <AdminSectionHeader
-        title="Category Home Page Display"
-        subtitle="Choose which categories appear on the home page and in what order."
+        title="Category Cards"
+        subtitle="choose which categories appear on the homepage."
         className="mt-10"
       />
       {saveState === 'saving' && (

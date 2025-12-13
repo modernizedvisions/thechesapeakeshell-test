@@ -128,58 +128,7 @@ export const mockReviews: Review[] = [
   },
 ];
 
-export const defaultGalleryImages: GalleryImage[] = [
-  {
-    id: 'g1',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/fbcb1a181312/original',
-    hidden: false,
-  },
-  {
-    id: 'g2',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/2ebd792370e4/original',
-    hidden: false,
-  },
-  {
-    id: 'g3',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/b8100aac5e68/original',
-    hidden: false,
-  },
-  {
-    id: 'g4',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/31411a9ecd08/original',
-    hidden: false,
-  },
-  {
-    id: 'g5',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/0d594a4c3a71/original',
-    hidden: false,
-  },
-  {
-    id: 'g6',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/b06dfd242cbe/original',
-    hidden: false,
-  },
-  {
-    id: 'g7',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/2a80e1ff05b2/original',
-    hidden: false,
-  },
-  {
-    id: 'g8',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/f8aa6f90acbc/original',
-    hidden: false,
-  },
-  {
-    id: 'g9',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/d655de7033af/original',
-    hidden: false,
-  },
-  {
-    id: 'g10',
-    imageUrl: 'https://files.reimage.dev/modernizedvisions/d8ce04834f3c/original',
-    hidden: false,
-  },
-];
+export const defaultGalleryImages: GalleryImage[] = [];
 
 export const defaultHomeHeroConfig: HeroConfig = {
   heroImages: [
