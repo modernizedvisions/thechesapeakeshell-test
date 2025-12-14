@@ -179,23 +179,27 @@ function jsonResponse(data: unknown, status = 200) {
 }
 
 async function generateDisplayCustomOrderId(db: D1Database): Promise<string> {
-  const year = new Date().getFullYear() % 100;
-  await db.prepare('BEGIN IMMEDIATE TRANSACTION;').run();
+  const yearFull = new Date().getFullYear();
+  const yy = yearFull % 100;
   try {
-    const existing = await db.prepare(`SELECT counter FROM custom_order_counters WHERE year = ?`).bind(year).first<{ counter: number }>();
-    let counter = 1;
-    if (existing?.counter) {
-      counter = existing.counter + 1;
-      await db.prepare(`UPDATE custom_order_counters SET counter = ? WHERE year = ?`).bind(counter, year).run();
-    } else {
-      await db.prepare(`INSERT INTO custom_order_counters (year, counter) VALUES (?, ?)`).bind(year, counter).run();
+    const counterRow = await db
+      .prepare(
+        `INSERT INTO custom_order_counters (year, counter)
+         VALUES (?, 1)
+         ON CONFLICT(year) DO UPDATE SET counter = counter + 1
+         RETURNING counter;`
+      )
+      .bind(yearFull)
+      .first<{ counter: number }>();
+
+    if (!counterRow || typeof counterRow.counter !== 'number') {
+      throw new Error('Missing counter value');
     }
-    await db.prepare('COMMIT;').run();
-    const padded = String(counter).padStart(3, '0');
-    return `CO-${year}-${padded}`;
+
+    const padded = String(counterRow.counter).padStart(3, '0');
+    return `CO-${yy}-${padded}`;
   } catch (error) {
     console.error('Failed to generate display custom order id', error);
-    await db.prepare('ROLLBACK;').run();
     throw error;
   }
 }
@@ -225,37 +229,17 @@ async function backfillDisplayCustomOrderIds(db: D1Database) {
   const existingCounters = await db.prepare(`SELECT year, counter FROM custom_order_counters`).all<{ year: number; counter: number }>();
   (existingCounters.results || []).forEach((row) => countersByYear.set(row.year, row.counter));
 
-  await db.prepare('BEGIN IMMEDIATE TRANSACTION;').run();
   try {
     for (const row of rows) {
-      const yearFull = row.created_at ? new Date(row.created_at).getFullYear() : new Date().getFullYear();
-      const year = yearFull % 100;
-      const current = countersByYear.get(year) ?? 0;
-      const next = current + 1;
-      countersByYear.set(year, next);
-
-      const padded = String(next).padStart(3, '0');
-      const displayId = `CO-${year}-${padded}`;
-
+      const displayId = await generateDisplayCustomOrderId(db);
       await db
         .prepare(`UPDATE custom_orders SET display_custom_order_id = ? WHERE id = ?`)
         .bind(displayId, row.id)
         .run();
     }
 
-    for (const [year, counter] of countersByYear.entries()) {
-      const existing = await db.prepare(`SELECT counter FROM custom_order_counters WHERE year = ?`).bind(year).first<{ counter: number }>();
-      if (existing) {
-        await db.prepare(`UPDATE custom_order_counters SET counter = ? WHERE year = ?`).bind(counter, year).run();
-      } else {
-        await db.prepare(`INSERT INTO custom_order_counters (year, counter) VALUES (?, ?)`).bind(year, counter).run();
-      }
-    }
-
-    await db.prepare('COMMIT;').run();
   } catch (error) {
     console.error('Failed to backfill display custom order ids', error);
-    await db.prepare('ROLLBACK;').run();
     throw error;
   }
 }
