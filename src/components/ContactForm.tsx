@@ -109,7 +109,7 @@ export function ContactForm() {
   };
 
   return (
-    <div className="py-12 bg-white" id="contact">
+    <div className="py-12" id="contact" style={{ backgroundColor: 'var(--follow-bg, #f1f5f9)' }}>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">
           Get In Touch

@@ -63,9 +63,12 @@ export const onRequestPost = async (context: {
     return new Response('Invalid signature', { status: 400 });
   }
 
+  console.log('[stripe webhook] received event', { type: event.type, id: event.id });
+
   try {
     if (event.type === 'checkout.session.completed') {
       const sessionSummary = event.data.object as Stripe.Checkout.Session;
+      console.log('[stripe webhook] checkout.session.completed', { sessionId: sessionSummary.id });
       const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY);
       const session = await stripeClient.checkout.sessions.retrieve(sessionSummary.id, {
         expand: [
@@ -203,6 +206,11 @@ export const onRequestPost = async (context: {
 
       // Insert order + order_items (best effort; do not throw).
       try {
+        console.log('[stripe webhook] inserting order', {
+          sessionId: session.id,
+          paymentIntentId,
+          hasLineItems: !!session.line_items?.data?.length,
+        });
         await ensureOrdersSchema(env.DB);
         const orderId = crypto.randomUUID();
         const displayOrderId = await generateDisplayOrderId(env.DB);
@@ -282,7 +290,7 @@ export const onRequestPost = async (context: {
                 console.error('Failed to insert order_items into D1', itemResult.error);
               }
             }
-            console.log('Inserted order and items', { orderId, items: lineItems.length });
+            console.log('[stripe webhook] inserted order and items', { orderId, displayOrderId, items: lineItems.length });
           } else if (productId) {
             // Fallback: insert a single item using metadata product/quantity if no line_items were returned.
             const itemId = crypto.randomUUID();
@@ -306,12 +314,12 @@ export const onRequestPost = async (context: {
             if (!itemResult.success) {
               console.error('Failed to insert order_items into D1 (fallback)', itemResult.error);
             } else {
-              console.log('Inserted order and fallback item', { orderId, productId });
+              console.log('[stripe webhook] inserted order with fallback item', { orderId, displayOrderId, productId });
             }
           }
         }
       } catch (orderErr) {
-        console.error('Failed to persist order/order_items in D1', orderErr);
+        console.error('[stripe webhook] Failed to persist order/order_items in D1', orderErr);
       }
     }
 
@@ -323,17 +331,48 @@ export const onRequestPost = async (context: {
 };
 
 async function ensureOrdersSchema(db: D1Database) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    display_order_id TEXT,
+    order_type TEXT,
+    stripe_payment_intent_id TEXT,
+    total_cents INTEGER,
+    currency TEXT,
+    customer_email TEXT,
+    shipping_name TEXT,
+    shipping_address_json TEXT,
+    card_last4 TEXT,
+    card_brand TEXT,
+    description TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );`).run();
+
+  await db.prepare(`CREATE TABLE IF NOT EXISTS order_items (
+    id TEXT PRIMARY KEY,
+    order_id TEXT,
+    product_id TEXT,
+    quantity INTEGER,
+    price_cents INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  );`).run();
+
   await db.prepare(`CREATE TABLE IF NOT EXISTS order_counters (
     year INTEGER PRIMARY KEY,
     counter INTEGER NOT NULL
   );`).run();
 
-  // Add display_order_id column if missing
   const columns = await db.prepare(`PRAGMA table_info(orders);`).all<{ name: string }>();
-  const hasDisplay = (columns.results || []).some((c) => c.name === 'display_order_id');
-  if (!hasDisplay) {
-    await db.prepare(`ALTER TABLE orders ADD COLUMN display_order_id TEXT;`).run();
-  }
+  const columnNames = (columns.results || []).map((c) => c.name);
+  const addColumnIfMissing = async (name: string, ddl: string) => {
+    if (!columnNames.includes(name)) {
+      await db.prepare(ddl).run();
+    }
+  };
+
+  await addColumnIfMissing('display_order_id', `ALTER TABLE orders ADD COLUMN display_order_id TEXT;`);
+  await addColumnIfMissing('order_type', `ALTER TABLE orders ADD COLUMN order_type TEXT;`);
+  await addColumnIfMissing('currency', `ALTER TABLE orders ADD COLUMN currency TEXT;`);
+  await addColumnIfMissing('description', `ALTER TABLE orders ADD COLUMN description TEXT;`);
 
   await db
     .prepare(

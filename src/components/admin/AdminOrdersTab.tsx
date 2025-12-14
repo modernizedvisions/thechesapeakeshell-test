@@ -7,9 +7,10 @@ export interface AdminOrdersTabProps {
   filteredOrders: AdminOrder[];
   onSearchChange: (value: string) => void;
   onSelectOrder: (order: AdminOrder) => void;
+  error?: string | null;
 }
 
-export function AdminOrdersTab({ searchQuery, filteredOrders, onSearchChange, onSelectOrder }: AdminOrdersTabProps) {
+export function AdminOrdersTab({ searchQuery, filteredOrders, onSearchChange, onSelectOrder, error }: AdminOrdersTabProps) {
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="px-6 pt-6">
@@ -27,7 +28,11 @@ export function AdminOrdersTab({ searchQuery, filteredOrders, onSearchChange, on
           className="w-full sm:max-w-md border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-gray-900"
         />
       </div>
-      {filteredOrders.length === 0 ? (
+      {error ? (
+        <div className="p-8 text-center text-red-600">
+          Failed to load orders{error ? `: ${error}` : ''}
+        </div>
+      ) : filteredOrders.length === 0 ? (
         <div className="p-8 text-center text-gray-500">No orders yet</div>
       ) : (
         <div className="overflow-x-auto">

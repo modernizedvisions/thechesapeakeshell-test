@@ -119,16 +119,48 @@ function safeParseAddress(jsonString: string | null): Record<string, string | nu
 }
 
 async function ensureOrdersSchema(db: D1Database) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS orders (
+    id TEXT PRIMARY KEY,
+    display_order_id TEXT,
+    order_type TEXT,
+    stripe_payment_intent_id TEXT,
+    total_cents INTEGER,
+    currency TEXT,
+    customer_email TEXT,
+    shipping_name TEXT,
+    shipping_address_json TEXT,
+    card_last4 TEXT,
+    card_brand TEXT,
+    description TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );`).run();
+
+  await db.prepare(`CREATE TABLE IF NOT EXISTS order_items (
+    id TEXT PRIMARY KEY,
+    order_id TEXT,
+    product_id TEXT,
+    quantity INTEGER,
+    price_cents INTEGER,
+    created_at TEXT DEFAULT (datetime('now'))
+  );`).run();
+
   await db.prepare(`CREATE TABLE IF NOT EXISTS order_counters (
     year INTEGER PRIMARY KEY,
     counter INTEGER NOT NULL
   );`).run();
 
   const columns = await db.prepare(`PRAGMA table_info(orders);`).all<{ name: string }>();
-  const hasDisplay = (columns.results || []).some((c) => c.name === 'display_order_id');
-  if (!hasDisplay) {
-    await db.prepare(`ALTER TABLE orders ADD COLUMN display_order_id TEXT;`).run();
-  }
+  const columnNames = (columns.results || []).map((c) => c.name);
+  const addColumnIfMissing = async (name: string, ddl: string) => {
+    if (!columnNames.includes(name)) {
+      await db.prepare(ddl).run();
+    }
+  };
+
+  await addColumnIfMissing('display_order_id', `ALTER TABLE orders ADD COLUMN display_order_id TEXT;`);
+  await addColumnIfMissing('order_type', `ALTER TABLE orders ADD COLUMN order_type TEXT;`);
+  await addColumnIfMissing('currency', `ALTER TABLE orders ADD COLUMN currency TEXT;`);
+  await addColumnIfMissing('description', `ALTER TABLE orders ADD COLUMN description TEXT;`);
 
   await db
     .prepare(`CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_display_order_id ON orders(display_order_id);`)

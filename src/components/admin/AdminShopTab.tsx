@@ -267,7 +267,14 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
   };
 
   const filteredProducts = useMemo(() => {
-    const all = adminProducts;
+    const all = adminProducts.filter((product) => {
+      const isSoldFlag =
+        (product as any).isSold === true ||
+        (product as any).is_sold === 1;
+      const quantity = (product as any).quantityAvailable ?? (product as any).quantity_available;
+      const soldOutByQuantity = typeof quantity === 'number' && quantity <= 0;
+      return !isSoldFlag && !soldOutByQuantity;
+    });
 
     return all.filter((product) => {
       const name = (product.name ?? '').toLowerCase();
@@ -536,7 +543,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
           </h3>
           <div className="hidden" />
         </div>
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <input
             type="text"
             value={searchTerm}
@@ -570,21 +577,27 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
           </div>
         )}
 
-        <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredProducts.map((product) => (
-            <ProductAdminCard
-              key={product.id}
-              product={product}
-              onEdit={(p) => {
-                setIsEditModalOpen(true);
-                onStartEditProduct(p);
-              }}
-              onDelete={async (id) => {
-                await onDeleteProduct(id);
-              }}
-            />
-          ))}
-        </div>
+        {filteredProducts.length === 0 ? (
+          <div className="text-center text-gray-500 py-8 border border-dashed border-gray-200 rounded-lg">
+            No active products
+          </div>
+        ) : (
+          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredProducts.map((product) => (
+              <ProductAdminCard
+                key={product.id}
+                product={product}
+                onEdit={(p) => {
+                  setIsEditModalOpen(true);
+                  onStartEditProduct(p);
+                }}
+                onDelete={async (id) => {
+                  await onDeleteProduct(id);
+                }}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>

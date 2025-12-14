@@ -68,6 +68,7 @@ export function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const [soldProducts, setSoldProducts] = useState<Product[]>([]);
@@ -140,6 +141,14 @@ export function AdminPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (activeTab === 'shop' || activeTab === 'sold') {
+      loadAdminProducts();
+      refreshSoldProducts();
+    }
+  }, [activeTab, isAuthenticated]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -163,7 +172,14 @@ export function AdminPage() {
 
   const loadAdminData = async () => {
     const [ordersData, soldData, galleryData, heroData] = await Promise.all([
-      fetchOrders(),
+      fetchOrders().then((data) => {
+        setOrdersError(null);
+        return data;
+      }).catch((err) => {
+        console.error('Failed to load admin orders', err);
+        setOrdersError(err instanceof Error ? err.message : 'Failed to load orders');
+        return [];
+      }),
       fetchSoldProducts(),
       fetchGalleryImages(),
       fetchHomeHeroConfig(),
@@ -182,6 +198,15 @@ export function AdminPage() {
     sessionStorage.removeItem('admin_token');
     setIsAuthenticated(false);
     setPassword('');
+  };
+
+  const refreshSoldProducts = async () => {
+    try {
+      const data = await fetchSoldProducts();
+      setSoldProducts(data);
+    } catch (err) {
+      console.error('Failed to refresh sold products', err);
+    }
   };
 
   const loadAdminProducts = async () => {
@@ -579,6 +604,7 @@ export function AdminPage() {
             filteredOrders={filteredOrders}
             onSearchChange={setSearchQuery}
             onSelectOrder={setSelectedOrder}
+            error={ordersError}
           />
         )}
 
