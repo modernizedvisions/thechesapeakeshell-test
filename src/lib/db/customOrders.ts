@@ -16,7 +16,13 @@ export async function getAdminCustomOrders(): Promise<AdminCustomOrder[]> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
 
-  const res = await fetch(ADMIN_CUSTOM_ORDERS_PATH, {
+  const url = `${ADMIN_CUSTOM_ORDERS_PATH}?ts=${Date.now()}`;
+
+  if (import.meta.env.DEV) {
+    console.debug('[admin custom orders] fetching', { url });
+  }
+
+  const res = await fetch(url, {
     headers: { Accept: 'application/json' },
     cache: 'no-store',
     signal: controller.signal,
@@ -44,6 +50,9 @@ export async function getAdminCustomOrders(): Promise<AdminCustomOrder[]> {
   const orders = Array.isArray(data.orders) ? (data.orders as AdminCustomOrder[]) : [];
   if (import.meta.env.DEV) {
     console.debug('[admin custom orders] parsed orders', { count: orders.length, sample: orders.slice(0, 2), raw: data });
+    if (orders.length === 0) {
+      console.debug('[admin custom orders] empty orders array returned from /api/admin/custom-orders');
+    }
   }
   return orders;
 }

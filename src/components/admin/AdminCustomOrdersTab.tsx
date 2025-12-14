@@ -7,6 +7,7 @@ interface AdminCustomOrdersTabProps {
   allCustomOrders: any[];
   onCreateOrder: (data: any) => Promise<void> | void;
   onMarkPaid?: (id: string) => Promise<void> | void;
+  onReloadOrders?: () => Promise<void> | void;
   initialDraft?: any;
   onDraftConsumed?: () => void;
   isLoading?: boolean;
@@ -17,6 +18,7 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
   allCustomOrders,
   onCreateOrder,
   onMarkPaid,
+  onReloadOrders,
   initialDraft,
   onDraftConsumed,
   isLoading,
@@ -61,6 +63,10 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
     }
   }, [isModalOpen, reset]);
 
+  if (import.meta.env.DEV) {
+    console.debug('[custom orders tab] render', { count: allCustomOrders.length });
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-4">
       <div className="space-y-3">
@@ -79,6 +85,15 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
           >
             New Custom Order
           </button>
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={() => onReloadOrders?.()}
+              className="ml-2 rounded-md border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-700 hover:border-gray-400"
+            >
+              Debug: Reload
+            </button>
+          )}
         </div>
       </div>
 

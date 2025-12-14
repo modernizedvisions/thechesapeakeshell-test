@@ -230,16 +230,25 @@ export function AdminPage() {
 
   const loadCustomOrders = async () => {
     setIsLoadingCustomOrders(true);
+    if (import.meta.env.DEV) {
+      console.debug('[custom orders] fetching');
+    }
     try {
       const orders = await getAdminCustomOrders();
       setCustomOrders(orders);
       setCustomOrdersError(null);
+      if (import.meta.env.DEV) {
+        console.debug('[custom orders] fetched', { count: orders.length, first: orders[0] });
+      }
     } catch (err) {
       console.error('Failed to load custom orders', err);
       setCustomOrders([]);
       setCustomOrdersError(err instanceof Error ? err.message : 'Failed to load custom orders');
     } finally {
       setIsLoadingCustomOrders(false);
+      if (import.meta.env.DEV) {
+        console.debug('[custom orders] state set (post-load)');
+      }
     }
   };
 
@@ -727,6 +736,7 @@ export function AdminPage() {
             onDraftConsumed={() => setCustomOrderDraft(null)}
             isLoading={isLoadingCustomOrders}
             error={customOrdersError}
+            onReloadOrders={loadCustomOrders}
             onMarkPaid={async (orderId: string) => {
               try {
                 setCustomOrdersError(null);
