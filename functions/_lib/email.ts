@@ -10,9 +10,12 @@ export type EmailEnv = {
   RESEND_API_KEY?: string;
   RESEND_FROM_EMAIL?: string;
   RESEND_REPLY_TO?: string;
+  RESEND_REPLY_TO_EMAIL?: string;
+  RESEND_OWNER_TO?: string;
   EMAIL_FROM?: string;
   EMAIL_OWNER_TO?: string;
   PUBLIC_SITE_URL?: string;
+  VITE_PUBLIC_SITE_URL?: string;
 };
 
 export async function sendEmail(
@@ -20,8 +23,8 @@ export async function sendEmail(
   env: EmailEnv
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const apiKey = env.RESEND_API_KEY;
-  const from = env.RESEND_FROM_EMAIL || env.EMAIL_FROM;
-  const replyTo = env.RESEND_REPLY_TO || args.replyTo;
+  const from = env.RESEND_FROM_EMAIL || env.EMAIL_FROM || 'onboarding@resend.dev';
+  const replyTo = env.RESEND_REPLY_TO || env.RESEND_REPLY_TO_EMAIL || args.replyTo;
 
   if (!apiKey || !from) {
     return {
