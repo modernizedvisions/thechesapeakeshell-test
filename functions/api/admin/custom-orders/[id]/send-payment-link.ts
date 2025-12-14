@@ -92,7 +92,7 @@ export async function onRequestPost(context: {
       return jsonResponse({ error: 'Custom order missing customer email' }, 400);
     }
 
-    const baseUrl = (env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+    const baseUrl = resolveSiteUrl(env);
     if (!baseUrl) {
       return jsonResponse({ error: 'Missing PUBLIC_SITE_URL' }, 500);
     }
@@ -103,7 +103,6 @@ export async function onRequestPost(context: {
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      ui_mode: 'hosted',
       customer_email: customerEmail,
       line_items: [
         {
@@ -126,11 +125,13 @@ export async function onRequestPost(context: {
           quantity: 1,
         },
       ],
-      return_url: `${baseUrl}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${baseUrl}/admin?customOrderPaid=1&co=${encodeURIComponent(displayId)}`,
+      cancel_url: `${baseUrl}/admin?customOrderCanceled=1&co=${encodeURIComponent(displayId)}`,
       metadata: {
         customOrderId: order.id,
         customOrderDisplayId: displayId,
         source: 'custom_order',
+        kind: 'custom_order',
       },
     });
 
@@ -200,6 +201,7 @@ async function ensureCustomOrdersSchema(db: D1Database) {
     message_id TEXT,
     status TEXT DEFAULT 'pending',
     payment_link TEXT,
+    stripe_session_id TEXT,
     stripe_payment_intent_id TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   );`).run();
@@ -235,4 +237,12 @@ async function getCustomOrdersColumns(db: D1Database) {
     ? 'customer_email1'
     : null;
   return { allColumns, emailCol };
+}
+
+function resolveSiteUrl(env: {
+  PUBLIC_SITE_URL?: string;
+  VITE_PUBLIC_SITE_URL?: string;
+}) {
+  const raw = env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '';
+  return raw ? raw.replace(/\/+$/, '') : '';
 }
