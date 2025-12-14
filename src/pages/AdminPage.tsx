@@ -22,7 +22,12 @@ import { AdminMessagesTab } from '../components/admin/AdminMessagesTab';
 import { AdminShopTab } from '../components/admin/AdminShopTab';
 import { AdminCustomOrdersTab } from '../components/admin/AdminCustomOrdersTab';
 import { OrderDetailsModal } from '../components/admin/OrderDetailsModal';
-import { getAdminCustomOrders, createAdminCustomOrder, updateAdminCustomOrder } from '../lib/db/customOrders';
+import {
+  getAdminCustomOrders,
+  createAdminCustomOrder,
+  updateAdminCustomOrder,
+} from '../lib/db/customOrders';
+import type { AdminCustomOrder } from '../lib/db/customOrders';
 
 export type ProductFormState = {
   name: string;
@@ -93,7 +98,7 @@ export function AdminPage() {
   const productImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const editProductImageFileInputRef = useRef<HTMLInputElement | null>(null);
   const [messages] = useState<any[]>([]);
-  const [customOrders, setCustomOrders] = useState<any[]>([]);
+  const [customOrders, setCustomOrders] = useState<AdminCustomOrder[]>([]);
   const [customOrderDraft, setCustomOrderDraft] = useState<any>(null);
   const [customOrdersError, setCustomOrdersError] = useState<string | null>(null);
   const [isLoadingCustomOrders, setIsLoadingCustomOrders] = useState(false);
@@ -701,6 +706,8 @@ export function AdminPage() {
             allCustomOrders={customOrders}
             onCreateOrder={async (order) => {
               try {
+                setCustomOrdersError(null);
+                setIsLoadingCustomOrders(true);
                 await createAdminCustomOrder({
                   customerName: order.customerName,
                   customerEmail: order.customerEmail,
@@ -711,6 +718,9 @@ export function AdminPage() {
                 await loadCustomOrders();
               } catch (err) {
                 console.error('Failed to create custom order', err);
+                setCustomOrdersError(err instanceof Error ? err.message : 'Failed to create custom order');
+              } finally {
+                setIsLoadingCustomOrders(false);
               }
             }}
             initialDraft={customOrderDraft}
@@ -719,10 +729,15 @@ export function AdminPage() {
             error={customOrdersError}
             onMarkPaid={async (orderId: string) => {
               try {
+                setCustomOrdersError(null);
+                setIsLoadingCustomOrders(true);
                 await updateAdminCustomOrder(orderId, { status: 'paid' });
                 await loadCustomOrders();
               } catch (err) {
                 console.error('Failed to mark custom order paid', err);
+                setCustomOrdersError(err instanceof Error ? err.message : 'Failed to mark custom order paid');
+              } finally {
+                setIsLoadingCustomOrders(false);
               }
             }}
           />
