@@ -57,9 +57,18 @@ export async function onRequestPost(context: {
   const id = params?.id;
 
   if (!env.STRIPE_SECRET_KEY) {
-    return jsonResponse({ error: 'Stripe is not configured' }, 500);
+    return jsonResponse({ error: 'Failed to send payment link', detail: 'Missing STRIPE_SECRET_KEY' }, 500);
   }
   if (!id) return jsonResponse({ error: 'Missing id' }, 400);
+
+  const hasResend = !!env.RESEND_API_KEY;
+  const fromEmail = env.RESEND_FROM_EMAIL || env.EMAIL_FROM;
+  if (!hasResend) {
+    return jsonResponse({ error: 'Failed to send payment link', detail: 'Missing RESEND_API_KEY' }, 500);
+  }
+  if (!fromEmail) {
+    return jsonResponse({ error: 'Failed to send payment link', detail: 'Missing RESEND_FROM_EMAIL/EMAIL_FROM' }, 500);
+  }
 
   try {
     await ensureCustomOrdersSchema(env.DB);
@@ -164,6 +173,13 @@ export async function onRequestPost(context: {
     if (!emailResult.ok) {
       console.error('[custom-orders send-link] email send failed', emailResult.error);
     }
+
+    console.log('[custom-orders send-link] done', {
+      customOrderId: order.id,
+      displayId,
+      sessionId: session.id,
+      emailOk: emailResult.ok,
+    });
 
     return jsonResponse({ success: true, paymentLink: session.url, sessionId: session.id, emailOk: emailResult.ok });
   } catch (err) {

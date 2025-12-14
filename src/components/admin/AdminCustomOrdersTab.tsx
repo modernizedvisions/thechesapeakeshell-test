@@ -99,11 +99,15 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
         </div>
       </div>
 
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       <div className="rounded-md border border-gray-200">
         {isLoading ? (
           <div className="p-4 text-sm text-gray-600">Loading custom orders...</div>
-        ) : error ? (
-          <div className="p-4 text-sm text-red-600">Failed to load custom orders: {error}</div>
         ) : allCustomOrders.length === 0 ? (
           <div className="p-4 text-sm text-gray-600">No custom orders yet.</div>
         ) : (
