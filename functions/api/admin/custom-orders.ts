@@ -14,6 +14,7 @@ type CustomOrderRow = {
   display_custom_order_id?: string | null;
   customer_name: string | null;
   customer_email: string | null;
+  customer_email1?: string | null;
   description: string | null;
   amount: number | null;
   message_id: string | null;
@@ -35,26 +36,32 @@ type CustomOrderPayload = {
 export async function onRequestGet(context: { env: { DB: D1Database } }): Promise<Response> {
   try {
     await ensureCustomOrdersSchema(context.env.DB);
-    console.log('[custom-orders] ensured schema');
-    const statement = context.env.DB.prepare(`
-      SELECT id, display_custom_order_id, customer_name, customer_email, description, amount, message_id, status, payment_link, created_at
-      FROM custom_orders
-      ORDER BY created_at DESC
-    `);
+    const columns = await getCustomOrdersColumns(context.env.DB);
+    const emailCol = columns.emailCol;
+    console.log('[custom-orders] ensured schema', { columns: columns.allColumns, emailCol });
+
+    const statement = context.env.DB.prepare(
+      `SELECT id, display_custom_order_id, customer_name, ${emailCol ? `${emailCol} AS customer_email` : 'NULL AS customer_email'}, description, amount, message_id, status, payment_link, created_at
+       FROM custom_orders
+       ORDER BY datetime(created_at) DESC`
+    );
     const { results } = await statement.all<CustomOrderRow>();
     const orders = (results || []).map(mapRow);
     console.log('[custom-orders] fetched orders', { count: orders.length });
     return jsonResponse({ orders });
   } catch (err) {
     console.error('Failed to fetch custom orders', err);
-    return jsonResponse({ error: 'Failed to fetch custom orders' }, 500);
+    const message = err instanceof Error ? err.message : String(err);
+    return jsonResponse({ error: 'Failed to fetch custom orders', detail: message }, 500);
   }
 }
 
 export async function onRequestPost(context: { env: { DB: D1Database }; request: Request }): Promise<Response> {
   try {
     await ensureCustomOrdersSchema(context.env.DB);
-    console.log('[custom-orders] ensured schema (post)');
+    const columns = await getCustomOrdersColumns(context.env.DB);
+    const emailCol = columns.emailCol;
+    console.log('[custom-orders] ensured schema (post)', { columns: columns.allColumns, emailCol });
     const body = (await context.request.json().catch(() => null)) as Partial<CustomOrderPayload> | null;
     if (!body || !body.customerName || !body.customerEmail || !body.description) {
       return jsonResponse({ error: 'customerName, customerEmail, and description are required.' }, 400);
@@ -65,14 +72,28 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
     const status = body.status === 'paid' ? 'paid' : 'pending';
     const displayId = await generateDisplayCustomOrderId(context.env.DB);
 
-    const stmt = context.env.DB.prepare(`
-      INSERT INTO custom_orders (id, display_custom_order_id, customer_name, customer_email, description, amount, message_id, status, payment_link, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
+    const insertColumns = [
+      'id',
+      'display_custom_order_id',
+      'customer_name',
+      emailCol ?? undefined,
+      'description',
+      'amount',
+      'message_id',
+      'status',
+      'payment_link',
+      'created_at',
+    ].filter(Boolean) as string[];
+    const placeholders = insertColumns.map(() => '?').join(', ');
+    const values: unknown[] = [
       id,
       displayId,
       body.customerName.trim(),
-      body.customerEmail.trim(),
+    ];
+    if (emailCol) {
+      values.push(body.customerEmail.trim());
+    }
+    values.push(
       body.description.trim(),
       body.amount ?? null,
       body.messageId ?? null,
@@ -81,17 +102,23 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
       createdAt
     );
 
+    console.log('[custom-orders] inserting', { insertColumns, displayId });
+    const stmt = context.env.DB.prepare(
+      `INSERT INTO custom_orders (${insertColumns.join(', ')}) VALUES (${placeholders})`
+    ).bind(...values);
+
     const result = await stmt.run();
     if (!result.success) {
       console.error('Failed to insert custom order', result.error);
-      return jsonResponse({ error: 'Failed to create custom order' }, 500);
+      return jsonResponse({ error: 'Failed to create custom order', detail: result.error || 'unknown error' }, 500);
     }
 
     // TODO: Add Stripe payment link creation when wiring payments.
     return jsonResponse({ success: true, id, displayId, createdAt });
   } catch (err) {
     console.error('Failed to create custom order', err);
-    return jsonResponse({ error: 'Failed to create custom order' }, 500);
+    const message = err instanceof Error ? err.message : String(err);
+    return jsonResponse({ error: 'Failed to create custom order', detail: message }, 500);
   }
 }
 
@@ -132,7 +159,7 @@ function mapRow(row: CustomOrderRow) {
     id: row.id,
     displayCustomOrderId: row.display_custom_order_id ?? '',
     customerName: row.customer_name ?? '',
-    customerEmail: row.customer_email ?? '',
+    customerEmail: row.customer_email ?? row.customer_email1 ?? '',
     description: row.description ?? '',
     amount: row.amount ?? null,
     messageId: row.message_id ?? null,
@@ -171,6 +198,17 @@ async function generateDisplayCustomOrderId(db: D1Database): Promise<string> {
     await db.prepare('ROLLBACK;').run();
     throw error;
   }
+}
+
+async function getCustomOrdersColumns(db: D1Database) {
+  const { results } = await db.prepare(`PRAGMA table_info(custom_orders);`).all<{ name: string }>();
+  const allColumns = (results || []).map((c) => c.name);
+  const emailCol = allColumns.includes('customer_email')
+    ? 'customer_email'
+    : allColumns.includes('customer_email1')
+    ? 'customer_email1'
+    : null;
+  return { allColumns, emailCol };
 }
 
 async function backfillDisplayCustomOrderIds(db: D1Database) {

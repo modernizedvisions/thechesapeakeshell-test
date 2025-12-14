@@ -66,7 +66,9 @@ export async function createAdminCustomOrder(payload: {
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message = (data && data.error) || `Failed to create custom order (${res.status})`;
+    const message =
+      (data && (data.error || data.detail)) ||
+      `Failed to create custom order (${res.status})`;
     throw new Error(message);
   }
 
@@ -100,8 +102,9 @@ export async function updateAdminCustomOrder(
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    const message = (data && data.error) || `Failed to update custom order (${res.status})`;
+    const message =
+      (data && (data.error || data.detail)) ||
+      `Failed to update custom order (${res.status})`;
     throw new Error(message);
   }
 }
-

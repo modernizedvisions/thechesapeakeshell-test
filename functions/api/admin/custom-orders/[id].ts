@@ -22,7 +22,9 @@ type CustomOrderPayload = {
 export async function onRequestPatch(context: { env: { DB: D1Database }; request: Request; params: Record<string, string> }): Promise<Response> {
   try {
     await ensureCustomOrdersSchema(context.env.DB);
-    console.log('[custom-orders/:id] ensured schema (patch)');
+    const columns = await getCustomOrdersColumns(context.env.DB);
+    const emailCol = columns.emailCol;
+    console.log('[custom-orders/:id] ensured schema (patch)', { columns: columns.allColumns, emailCol });
     const id = context.params?.id;
     if (!id) return jsonResponse({ error: 'Missing id' }, 400);
 
@@ -43,8 +45,12 @@ export async function onRequestPatch(context: { env: { DB: D1Database }; request
       values.push(body.customerName.trim());
     }
     if (body.customerEmail !== undefined) {
-      fields.push('customer_email = ?');
-      values.push(body.customerEmail.trim());
+      if (emailCol) {
+        fields.push(`${emailCol} = ?`);
+        values.push(body.customerEmail.trim());
+      } else {
+        console.warn('[custom-orders/:id] no email column found; skipping email update');
+      }
     }
     if (body.description !== undefined) {
       fields.push('description = ?');
@@ -76,14 +82,15 @@ export async function onRequestPatch(context: { env: { DB: D1Database }; request
     const result = await stmt.run();
     if (!result.success) {
       console.error('Failed to update custom order', result.error);
-      return jsonResponse({ error: 'Failed to update custom order' }, 500);
+      return jsonResponse({ error: 'Failed to update custom order', detail: result.error || 'unknown error' }, 500);
     }
 
     // TODO: Add Stripe reconciliation when payments are wired.
     return jsonResponse({ success: true });
   } catch (err) {
     console.error('Failed to update custom order', err);
-    return jsonResponse({ error: 'Failed to update custom order' }, 500);
+    const message = err instanceof Error ? err.message : String(err);
+    return jsonResponse({ error: 'Failed to update custom order', detail: message }, 500);
   }
 }
 
@@ -117,6 +124,17 @@ async function ensureCustomOrdersSchema(db: D1Database) {
   ).run();
 }
 
+async function getCustomOrdersColumns(db: D1Database) {
+  const { results } = await db.prepare(`PRAGMA table_info(custom_orders);`).all<{ name: string }>();
+  const allColumns = (results || []).map((c) => c.name);
+  const emailCol = allColumns.includes('customer_email')
+    ? 'customer_email'
+    : allColumns.includes('customer_email1')
+    ? 'customer_email1'
+    : null;
+  return { allColumns, emailCol };
+}
+
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -125,4 +143,3 @@ function jsonResponse(data: unknown, status = 200) {
     },
   });
 }
-

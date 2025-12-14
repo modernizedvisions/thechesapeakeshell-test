@@ -127,14 +127,43 @@ export function CheckoutPage() {
     };
   }, [clientSecret]);
 
-  const priceDisplay = useMemo(() => {
-    if (!product?.priceCents) return '';
-    return `$${(product.priceCents / 100).toFixed(2)}`;
-  }, [product]);
+  const previewItems = useMemo(() => {
+    if (cartItems.length) {
+      return cartItems.map((item) => ({
+        id: item.productId,
+        name: item.name,
+        collection: (item as any).collection,
+        description: (item as any).description,
+        imageUrl: item.imageUrl,
+        quantity: item.quantity,
+        priceCents: item.priceCents,
+      }));
+    }
+    if (product) {
+      return [
+        {
+          id: product.id ?? product.stripeProductId ?? 'product',
+          name: product.name,
+          collection: product.collection || product.type,
+          description: product.description,
+          imageUrl: (product as any).thumbnailUrl || (product as any).imageUrl || null,
+          quantity: 1,
+          priceCents: product.priceCents ?? 0,
+        },
+      ];
+    }
+    return [];
+  }, [cartItems, product]);
 
-  const shippingCents = calculateShippingCents(cartSubtotal || (product?.priceCents ?? 0));
-  const subtotalDisplay = `$${((cartSubtotal || product?.priceCents || 0) / 100).toFixed(2)}`;
-  const totalDisplay = `$${(((cartSubtotal || product?.priceCents || 0) + shippingCents) / 100).toFixed(2)}`;
+  const subtotalCents = useMemo(() => {
+    if (cartItems.length) return cartSubtotal;
+    return previewItems.reduce((sum, item) => sum + item.priceCents * (item.quantity || 1), 0);
+  }, [cartItems.length, cartSubtotal, previewItems]);
+
+  const shippingCents = calculateShippingCents(subtotalCents || 0);
+  const totalCents = (subtotalCents || 0) + shippingCents;
+
+  const formatMoney = (cents: number) => `$${((cents ?? 0) / 100).toFixed(2)}`;
 
   if (loading) {
     return (
@@ -165,45 +194,60 @@ export function CheckoutPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="md:col-span-1">
-            <div className="rounded-xl bg-white shadow-sm border border-gray-100 p-4 space-y-3">
-              <div className="flex items-center gap-3">
-                {product?.thumbnailUrl || product?.imageUrl ? (
-                  <img
-                    src={product.thumbnailUrl || product.imageUrl}
-                    alt={product?.name || 'Product'}
-                    className="w-16 h-16 rounded-md object-cover bg-gray-100"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-md bg-gray-100" />
-                )}
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500">{product?.collection || product?.type || 'Artwork'}</p>
-                  <h2 className="text-base font-semibold text-gray-900">{product?.name || 'Loading...'}</h2>
-                  {product?.priceCents != null && (
-                    <p className="text-sm font-semibold text-gray-900">{priceDisplay}</p>
-                  )}
-                </div>
+            <div className="rounded-xl bg-white shadow-sm border border-gray-100 p-4 space-y-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500">Order Preview</p>
+                <h2 className="text-base font-semibold text-gray-900">Items in your cart</h2>
               </div>
-              {product?.oneoff && (
-                <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800">
-                  One-of-a-kind
-                </span>
-              )}
-              {product?.description && (
-                <p className="text-xs text-gray-600 leading-snug line-clamp-3">{product.description}</p>
-              )}
+
+              <div className="space-y-3">
+                {previewItems.length === 0 && (
+                  <div className="text-sm text-gray-600">No items to display.</div>
+                )}
+                {previewItems.map((item) => {
+                  const lineTotal = (item.priceCents ?? 0) * (item.quantity || 1);
+                  return (
+                    <div key={`${item.id}-${item.name}`} className="flex gap-3">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name || 'Item'}
+                          className="w-14 h-14 rounded-md object-cover bg-gray-100 border border-gray-100"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-14 h-14 rounded-md bg-gray-100 border border-gray-100" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{item.name || 'Item'}</p>
+                          <span className="text-sm font-semibold text-gray-900">{formatMoney(lineTotal)}</span>
+                        </div>
+                        {item.collection && (
+                          <p className="text-[11px] uppercase tracking-wide text-gray-500">{item.collection}</p>
+                        )}
+                        {item.description && (
+                          <p className="text-xs text-gray-600 line-clamp-2">{item.description}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-0.5">Qty: {item.quantity || 1} × {formatMoney(item.priceCents)}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               <div className="border-t border-gray-200 pt-3 space-y-1 text-sm">
                 <div className="flex justify-between text-gray-700">
                   <span>Subtotal</span>
-                  <span className="font-medium">{subtotalDisplay}</span>
+                  <span className="font-medium">{formatMoney(subtotalCents || 0)}</span>
                 </div>
                 <div className="flex justify-between text-gray-700">
                   <span>Shipping</span>
-                  <span className="font-medium">${(shippingCents / 100).toFixed(2)}</span>
+                  <span className="font-medium">{formatMoney(shippingCents)}</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-gray-200 text-base font-semibold text-gray-900">
                   <span>Total</span>
-                  <span>{totalDisplay}</span>
+                  <span>{formatMoney(totalCents)}</span>
                 </div>
               </div>
             </div>
