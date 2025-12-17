@@ -156,7 +156,7 @@ export const onRequestPost = async (context: {
     }
 
     const shippingCents = calculateShippingCents(subtotalCents);
-    const expiresAt = Math.floor(Date.now() / 1000) + 600; // 10 minutes from now
+    const expiresAt = Math.floor(Date.now() / 1000) + 1800; // Stripe requires at least 30 minutes
     console.log('Creating embedded checkout session with expires_at', expiresAt);
 
     try {
