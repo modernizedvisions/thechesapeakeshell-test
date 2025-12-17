@@ -19,8 +19,12 @@ type Env = {
   DB: D1Database;
   EMAIL_OWNER_TO?: string;
   EMAIL_FROM?: string;
+  RESEND_OWNER_TO?: string;
+  RESEND_FROM_EMAIL?: string;
+  RESEND_REPLY_TO?: string;
   RESEND_API_KEY?: string;
   PUBLIC_SITE_URL?: string;
+  VITE_PUBLIC_SITE_URL?: string;
 };
 
 const createStripeClient = (secretKey: string) =>
@@ -36,6 +40,8 @@ export const onRequestPost = async (context: {
   env: Env;
 }) => {
   const { request, env } = context;
+  const ownerTo = env.RESEND_OWNER_TO || env.EMAIL_OWNER_TO;
+  const siteUrl = (env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
 
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
     console.error('Stripe secrets are not configured');
@@ -187,6 +193,7 @@ export const onRequestPost = async (context: {
       } else if (customOrderId || customSource) {
         await handleCustomOrderPayment({
           db: env.DB,
+          env,
           session,
           paymentIntentId,
           customerEmail,
@@ -240,7 +247,7 @@ export const onRequestPost = async (context: {
         }
       }
 
-      await insertStandardOrderAndItems({
+      const insertResult = await insertStandardOrderAndItems({
         db: env.DB,
         session,
         paymentIntentId,
@@ -253,6 +260,80 @@ export const onRequestPost = async (context: {
         productId,
         quantityFromMeta,
       });
+
+      if (!ownerTo) {
+        console.warn('[stripe webhook] owner email missing; skipping receipt email');
+        return new Response('ok', { status: 200 });
+      }
+
+      if (insertResult && !invoiceId && !customOrderId && !customSource) {
+        const lineItems = (session.line_items?.data || []).filter((line) => {
+          const desc = line.description || (line.price as any)?.product_data?.name || '';
+          return !desc.toLowerCase().includes('shipping');
+        });
+
+        const itemLines = lineItems.map((line) => {
+          const desc =
+            line.description ||
+            (line.price?.product && typeof line.price.product !== 'string'
+              ? (line.price.product as Stripe.Product).name
+              : null) ||
+            'Item';
+          const qty = line.quantity ?? 1;
+          const lineTotal = line.amount_total ?? 0;
+          return `${desc} (x${qty}) - ${formatAmount(lineTotal, session.currency || 'usd')}`;
+        });
+
+        const orderLabel = insertResult.displayOrderId || insertResult.orderId;
+        const totalLabel = formatAmount(session.amount_total ?? 0, session.currency || 'usd');
+        const shippingLabel = shippingCents ? formatAmount(shippingCents, session.currency || 'usd') : null;
+
+        const emailHtml = `
+          <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.5;">
+            <h2 style="margin: 0 0 12px; font-size: 18px;">New order received</h2>
+            <p style="margin: 0 0 8px;"><strong>Order:</strong> ${orderLabel}</p>
+            <p style="margin: 0 0 8px;"><strong>Customer:</strong> ${customerEmail || 'Unknown'}</p>
+            <p style="margin: 0 0 8px;"><strong>Total:</strong> ${totalLabel}</p>
+            ${shippingLabel ? `<p style="margin: 0 0 8px;"><strong>Shipping:</strong> ${shippingLabel}</p>` : ''}
+            <p style="margin: 12px 0 8px;"><strong>Items:</strong></p>
+            <ul style="margin: 0 0 12px; padding-left: 18px;">
+              ${itemLines.map((line) => `<li>${line}</li>`).join('')}
+            </ul>
+            <p style="margin: 0 0 8px;"><strong>Time:</strong> ${new Date().toISOString()}</p>
+            ${siteUrl ? `<p style="margin: 0;"><a href="${siteUrl}/admin" style="color:#0f172a;">View in admin</a></p>` : ''}
+          </div>
+        `;
+        const emailText = [
+          `New order received`,
+          `Order: ${orderLabel}`,
+          `Customer: ${customerEmail || 'Unknown'}`,
+          `Total: ${totalLabel}`,
+          shippingLabel ? `Shipping: ${shippingLabel}` : null,
+          'Items:',
+          ...itemLines.map((line) => `- ${line}`),
+          `Time: ${new Date().toISOString()}`,
+          siteUrl ? `Admin: ${siteUrl}/admin` : null,
+        ]
+          .filter(Boolean)
+          .join('\n');
+
+        try {
+          const emailResult = await sendEmail(
+            {
+              to: ownerTo,
+              subject: `New Order – The Chesapeake Shell (${orderLabel})`,
+              html: emailHtml,
+              text: emailText,
+            },
+            env
+          );
+          if (!emailResult.ok) {
+            console.error('[stripe webhook] owner receipt email failed', emailResult.error);
+          }
+        } catch (emailError) {
+          console.error('[stripe webhook] owner receipt email error', emailError);
+        }
+      }
     }
 
     return new Response('ok', { status: 200 });
@@ -419,27 +500,28 @@ async function handleCustomInvoicePayment(args: {
   const description = session.metadata?.description || 'Custom invoice payment';
   const amountCents = amountTotal ?? 0;
   const email = customerEmail || session.customer_details?.email || null;
+  const shippingCents = Number((session.total_details as any)?.amount_shipping ?? 0) || 0;
 
-      await ensureShippingColumn(db);
-      let inserted = await db
-        .prepare(
-          `INSERT INTO orders (
+  await ensureShippingColumn(db);
+  let inserted = await db
+    .prepare(
+      `INSERT INTO orders (
         id, display_order_id, order_type, stripe_payment_intent_id, total_cents, currency, customer_email, shipping_name, shipping_address_json, card_last4, card_brand, description, shipping_cents
       ) VALUES (?, ?, 'custom', ?, ?, ?, ?, NULL, NULL, NULL, NULL, ?, ?);`
-        )
+    )
     .bind(orderId, displayOrderId, paymentIntentId, amountCents, currency, email, description, shippingCents)
-        .run();
+    .run();
 
-      if (!inserted.success && inserted.error?.includes('no such column')) {
-        inserted = await db
-          .prepare(
-            `INSERT INTO orders (
+  if (!inserted.success && inserted.error?.includes('no such column')) {
+    inserted = await db
+      .prepare(
+        `INSERT INTO orders (
           id, display_order_id, stripe_payment_intent_id, total_cents, customer_email, shipping_cents
         ) VALUES (?, ?, ?, ?, ?, ?);`
-          )
+      )
       .bind(orderId, displayOrderId, paymentIntentId, amountCents, email, shippingCents)
-          .run();
-      }
+      .run();
+  }
 
   if (!inserted.success) {
     throw new Error('[webhooks] Failed to insert custom order record');
@@ -447,34 +529,46 @@ async function handleCustomInvoicePayment(args: {
 
   // Send emails (best effort)
   const invoiceAmount = formatAmount(amountTotal, currency);
-  const invoiceLink = env.PUBLIC_SITE_URL
-    ? `${env.PUBLIC_SITE_URL.replace(/\/+$/, '')}/invoice/${invoiceId}`
-    : `/invoice/${invoiceId}`;
+  const siteUrl = (env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+  const invoiceLink = siteUrl ? `${siteUrl}/invoice/${invoiceId}` : `/invoice/${invoiceId}`;
 
   if (customerEmail) {
-    await sendEmail(
-      {
-        to: customerEmail,
-        subject: 'Payment received — The Chesapeake Shell',
-        html: `
-          <div style="font-family: Inter, Arial, sans-serif; color: #0f172a; padding: 12px; line-height: 1.5;">
-            <h2 style="margin: 0 0 12px; font-size: 18px; font-weight: 700;">Thank you for your payment</h2>
-            <p style="margin: 0 0 8px;">We received your payment for invoice ${invoiceId}.</p>
-            <p style="margin: 0 0 12px; font-weight: 600;">Amount: ${invoiceAmount}</p>
-            <p style="margin: 0 0 12px;">You can revisit your invoice here: <a href="${invoiceLink}" style="color:#0f172a;">${invoiceLink}</a></p>
-          </div>
-        `,
-        text: `Thank you for your payment.\nInvoice: ${invoiceId}\nAmount: ${invoiceAmount}\nView invoice: ${invoiceLink}`,
-      },
-      env
-    );
+    try {
+      const emailResult = await sendEmail(
+        {
+          to: customerEmail,
+          subject: 'Payment received - The Chesapeake Shell',
+          html: `
+            <div style="font-family: Inter, Arial, sans-serif; color: #0f172a; padding: 12px; line-height: 1.5;">
+              <h2 style="margin: 0 0 12px; font-size: 18px; font-weight: 700;">Thank you for your payment</h2>
+              <p style="margin: 0 0 8px;">We received your payment for invoice ${invoiceId}.</p>
+              <p style="margin: 0 0 12px; font-weight: 600;">Amount: ${invoiceAmount}</p>
+              <p style="margin: 0 0 12px;">You can revisit your invoice here: <a href="${invoiceLink}" style="color:#0f172a;">${invoiceLink}</a></p>
+            </div>
+          `,
+          text: `Thank you for your payment.\nInvoice: ${invoiceId}\nAmount: ${invoiceAmount}\nView invoice: ${invoiceLink}`,
+        },
+        env
+      );
+      if (!emailResult.ok) {
+        console.error('[custom invoice] customer email failed', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('[custom invoice] customer email error', emailError);
+    }
   }
 
-  if (env.EMAIL_OWNER_TO) {
-    await sendEmail(
+  const ownerTo = env.RESEND_OWNER_TO || env.EMAIL_OWNER_TO;
+  if (!ownerTo) {
+    console.warn('[custom invoice] owner email missing; skipping receipt email');
+    return;
+  }
+
+  try {
+    const emailResult = await sendEmail(
       {
-        to: env.EMAIL_OWNER_TO,
-        subject: `Custom invoice paid — ${invoiceId}`,
+        to: ownerTo,
+        subject: `Custom invoice paid - ${invoiceId}`,
         html: `
           <div style="font-family: Inter, Arial, sans-serif; color: #0f172a; padding: 12px; line-height: 1.5;">
             <h2 style="margin: 0 0 12px; font-size: 18px; font-weight: 700;">Custom invoice paid</h2>
@@ -488,6 +582,11 @@ async function handleCustomInvoicePayment(args: {
       },
       env
     );
+    if (!emailResult.ok) {
+      console.error('[custom invoice] owner email failed', emailResult.error);
+    }
+  } catch (emailError) {
+    console.error('[custom invoice] owner email error', emailError);
   }
 }
 
@@ -581,6 +680,7 @@ async function ensureCustomOrdersSchema(db: D1Database) {
 
 async function handleCustomOrderPayment(args: {
   db: D1Database;
+  env: Env;
   session: Stripe.Checkout.Session;
   paymentIntentId: string | null;
   customerEmail: string | null;
@@ -592,6 +692,7 @@ async function handleCustomOrderPayment(args: {
 }) {
   const {
     db,
+    env,
     session,
     paymentIntentId,
     customerEmail,
@@ -674,7 +775,7 @@ async function handleCustomOrderPayment(args: {
   }
 
   // Insert into orders/order_items if not already present
-  await insertStandardOrderAndItems({
+  const insertResult = await insertStandardOrderAndItems({
     db,
     session,
     paymentIntentId,
@@ -695,6 +796,58 @@ async function handleCustomOrderPayment(args: {
     ],
     totalCentsOverride: totalCents,
   });
+
+  const ownerTo = env.RESEND_OWNER_TO || env.EMAIL_OWNER_TO;
+  if (!ownerTo) {
+    console.warn('[custom order] owner email missing; skipping receipt email');
+    return;
+  }
+
+  if (!insertResult) return;
+
+  const orderLabel = displayId || insertResult.displayOrderId || insertResult.orderId;
+  const totalLabel = formatAmount(totalCents, session.currency || 'usd');
+  const adminLink = (env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '').replace(/\/+$/, '') + '/admin';
+
+  const emailHtml = `
+    <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.5;">
+      <h2 style="margin: 0 0 12px; font-size: 18px;">Custom order paid</h2>
+      <p style="margin: 0 0 8px;"><strong>Order:</strong> ${orderLabel}</p>
+      <p style="margin: 0 0 8px;"><strong>Customer:</strong> ${customOrder.customer_name || 'Unknown'} (${customerEmail || customOrder.customer_email || 'Unknown'})</p>
+      <p style="margin: 0 0 8px;"><strong>Total:</strong> ${totalLabel}</p>
+      <p style="margin: 0 0 8px;"><strong>Description:</strong> ${customOrder.description || 'Custom order payment'}</p>
+      <p style="margin: 0 0 8px;"><strong>Time:</strong> ${new Date().toISOString()}</p>
+      ${adminLink ? `<p style="margin: 0;"><a href="${adminLink}" style="color:#0f172a;">View in admin</a></p>` : ''}
+    </div>
+  `;
+  const emailText = [
+    'Custom order paid',
+    `Order: ${orderLabel}`,
+    `Customer: ${customOrder.customer_name || 'Unknown'} (${customerEmail || customOrder.customer_email || 'Unknown'})`,
+    `Total: ${totalLabel}`,
+    `Description: ${customOrder.description || 'Custom order payment'}`,
+    `Time: ${new Date().toISOString()}`,
+    adminLink ? `Admin: ${adminLink}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  try {
+    const emailResult = await sendEmail(
+      {
+        to: ownerTo,
+        subject: `Custom Order Paid – ${orderLabel} – The Chesapeake Shell`,
+        html: emailHtml,
+        text: emailText,
+      },
+      env
+    );
+    if (!emailResult.ok) {
+      console.error('[custom order] owner receipt email failed', emailResult.error);
+    }
+  } catch (emailError) {
+    console.error('[custom order] owner receipt email error', emailError);
+  }
 }
 
 async function insertStandardOrderAndItems(args: {
@@ -714,7 +867,7 @@ async function insertStandardOrderAndItems(args: {
   description?: string | null;
   lineItemsOverride?: { productId: string; quantity: number; priceCents: number }[];
   totalCentsOverride?: number;
-}) {
+}): Promise<{ orderId: string; displayOrderId: string } | null> {
   const {
     db,
     session,
@@ -741,7 +894,7 @@ async function insertStandardOrderAndItems(args: {
       .first<{ id: string }>();
     if (existing) {
       console.log('[orders] existing order found, skipping insert', { orderId: existing.id });
-      return;
+      return null;
     }
   }
 
@@ -885,4 +1038,6 @@ async function insertStandardOrderAndItems(args: {
   } else {
     console.warn('[stripe webhook] no line items available to insert for session', { sessionId: session.id });
   }
+
+  return { orderId, displayOrderId };
 }
