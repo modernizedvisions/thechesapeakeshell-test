@@ -488,7 +488,7 @@ export function AdminPage() {
     e.preventDefault();
     if (!editProductId || !editProductForm) return false;
     setEditProductSaveState('saving');
-    setProductMessage('');
+    setProductStatus({ type: null, message: '' });
 
     try {
       const manualUrls = mergeManualImages(editProductForm);
@@ -503,7 +503,7 @@ export function AdminPage() {
 
       const updated = await adminUpdateProduct(editProductId, payload);
       if (updated) {
-        setProductMessage('Product updated.');
+        setProductStatus({ type: 'success', message: 'Product updated.' });
         setEditProductId(null);
         setEditProductForm(null);
         setEditProductImages([]);
@@ -512,7 +512,9 @@ export function AdminPage() {
         setTimeout(() => setEditProductSaveState('idle'), 1500);
         return true;
       } else {
+        setProductStatus({ type: 'error', message: 'Update failed. Please try again.' });
         setEditProductSaveState('error');
+        setTimeout(() => setEditProductSaveState('idle'), 1500);
         return false;
       }
     } catch (err) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { fetchSoldProducts } from '../lib/api';
 import { Product } from '../lib/types';
 import { useGalleryImages } from '../lib/hooks/useGalleryImages';
@@ -34,6 +35,14 @@ export function GalleryPage() {
         <p className="text-center text-slate-600 text-sm md:text-base mb-10">
           Explore our collection of art pieces and sold works.
         </p>
+        <div className="flex justify-center mb-8">
+          <Link
+            to="/shop"
+            className="inline-flex items-center justify-center rounded-full bg-gray-900 px-6 py-2 text-sm font-medium text-white shadow-md transition hover:bg-gray-800"
+          >
+            Shop The Collection
+          </Link>
+        </div>
         <div className="mt-8"></div>
 
         {isLoading ? (

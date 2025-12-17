@@ -13,6 +13,15 @@ interface ProductAdminCardProps {
   onDelete?: (id: string) => Promise<void> | void;
 }
 
+const OTHER_ITEMS_CATEGORY = {
+  slug: 'other-items',
+  name: 'Other Items',
+};
+
+const isOtherItemsCategory = (category: Category) =>
+  (category.slug || '').toLowerCase() === OTHER_ITEMS_CATEGORY.slug ||
+  (category.name || '').trim().toLowerCase() === OTHER_ITEMS_CATEGORY.name.toLowerCase();
+
 const normalizeCategoriesList = (items: Category[]): Category[] => {
   const map = new Map<string, Category>();
 
@@ -26,7 +35,10 @@ const normalizeCategoriesList = (items: Category[]): Category[] => {
     map.set(key, normalized);
   });
 
-  return Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  const ordered = Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  const otherItems = ordered.filter((cat) => isOtherItemsCategory(cat));
+  const withoutOtherItems = ordered.filter((cat) => !isOtherItemsCategory(cat));
+  return [...withoutOtherItems, ...otherItems];
 };
 
 const ProductAdminCard: React.FC<ProductAdminCardProps> = ({ product, onEdit, onDelete }) => {

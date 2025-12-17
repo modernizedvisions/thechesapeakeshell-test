@@ -14,6 +14,15 @@ export interface AdminHomeTabProps {
   homeSaveState: 'idle' | 'saving' | 'success';
 }
 
+const OTHER_ITEMS_CATEGORY = {
+  slug: 'other-items',
+  name: 'Other Items',
+};
+
+const isOtherItemsCategory = (category: Category) =>
+  (category.slug || '').toLowerCase() === OTHER_ITEMS_CATEGORY.slug ||
+  (category.name || '').trim().toLowerCase() === OTHER_ITEMS_CATEGORY.name.toLowerCase();
+
 export function AdminHomeTab({
   heroImages,
   customOrdersImages,
@@ -223,7 +232,10 @@ const normalizeCategoriesList = (items: Category[]): Category[] => {
     const normalized: Category = { ...cat, id: cat.id || key };
     map.set(key, normalized);
   });
-  return Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  const ordered = Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  const otherItems = ordered.filter((cat) => isOtherItemsCategory(cat));
+  const withoutOtherItems = ordered.filter((cat) => !isOtherItemsCategory(cat));
+  return [...withoutOtherItems, ...otherItems];
 };
 
 function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: CustomOrdersImagesAdminProps) {

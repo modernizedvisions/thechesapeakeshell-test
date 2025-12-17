@@ -36,6 +36,12 @@ const BASE_CATEGORY_ORDER = [
   { name: 'Wine Stoppers', slug: 'wine-stopper' },
 ];
 
+const OTHER_ITEMS_CATEGORY = {
+  id: 'other-items',
+  name: 'Other Items',
+  slug: 'other-items',
+};
+
 const createCategoriesTable = `
   CREATE TABLE IF NOT EXISTS categories (
     id TEXT PRIMARY KEY,
@@ -58,6 +64,7 @@ export async function onRequestGet(context: { env: { DB: D1Database } }): Promis
   try {
     await ensureCategorySchema(context.env.DB);
     await seedDefaultCategories(context.env.DB);
+    await ensureOtherItemsCategory(context.env.DB);
 
     const { results } = await context.env.DB
       .prepare(`SELECT id, name, slug, image_url, hero_image_url, show_on_homepage FROM categories`)
@@ -121,7 +128,13 @@ const orderCategories = (items: Category[]): Category[] => {
     .filter((item) => !used.has(normalize(item.slug)))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return [...ordered, ...remaining];
+  const combined = [...ordered, ...remaining];
+  const otherItemsKey = normalize(OTHER_ITEMS_CATEGORY.slug);
+  const isOtherItems = (item: Category) =>
+    normalize(item.slug) === otherItemsKey || normalize(item.name) === otherItemsKey;
+  const otherItems = combined.filter(isOtherItems);
+  const withoutOtherItems = combined.filter((item) => !isOtherItems(item));
+  return [...withoutOtherItems, ...otherItems];
 };
 
 async function seedDefaultCategories(db: D1Database) {
@@ -174,4 +187,34 @@ async function ensureCategorySchema(db: D1Database) {
       `UPDATE categories SET hero_image_url = image_url WHERE (hero_image_url IS NULL OR hero_image_url = '') AND image_url IS NOT NULL;`
     )
     .run();
+}
+
+async function ensureOtherItemsCategory(db: D1Database) {
+  try {
+    const existing = await db
+      .prepare(`SELECT id, slug, name FROM categories WHERE LOWER(slug) IN (?, ?) OR LOWER(name) = ? LIMIT 1;`)
+      .bind(OTHER_ITEMS_CATEGORY.slug, 'uncategorized', OTHER_ITEMS_CATEGORY.name.toLowerCase())
+      .first<{ id: string | null; slug?: string | null; name?: string | null }>();
+
+    if (existing?.id) {
+      const normalizedSlug = toSlug(existing.slug || existing.name || '');
+      if (normalizedSlug !== OTHER_ITEMS_CATEGORY.slug) {
+        await db
+          .prepare(`UPDATE categories SET slug = ?, name = ?, show_on_homepage = 1 WHERE id = ?;`)
+          .bind(OTHER_ITEMS_CATEGORY.slug, OTHER_ITEMS_CATEGORY.name, existing.id)
+          .run();
+      }
+      return existing.id;
+    }
+
+    const id = OTHER_ITEMS_CATEGORY.id || crypto.randomUUID();
+    await db
+      .prepare(`INSERT INTO categories (id, name, slug, show_on_homepage) VALUES (?, ?, ?, 1);`)
+      .bind(id, OTHER_ITEMS_CATEGORY.name, OTHER_ITEMS_CATEGORY.slug)
+      .run();
+    return id;
+  } catch (error) {
+    console.error('Failed to ensure Other Items category', error);
+    return null;
+  }
 }

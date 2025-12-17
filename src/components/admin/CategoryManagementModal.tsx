@@ -12,6 +12,15 @@ interface CategoryManagementModalProps {
   onCategorySelected?: (name: string) => void;
 }
 
+const OTHER_ITEMS_CATEGORY = {
+  slug: 'other-items',
+  name: 'Other Items',
+};
+
+const isOtherItemsCategory = (category: Category) =>
+  (category.slug || '').toLowerCase() === OTHER_ITEMS_CATEGORY.slug ||
+  (category.name || '').trim().toLowerCase() === OTHER_ITEMS_CATEGORY.name.toLowerCase();
+
 const normalizeCategoriesList = (items: Category[]): Category[] => {
   const map = new Map<string, Category>();
   items.forEach((cat) => {
@@ -20,7 +29,10 @@ const normalizeCategoriesList = (items: Category[]): Category[] => {
     const normalized: Category = { ...cat, id: cat.id || key };
     map.set(key, normalized);
   });
-  return Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  const ordered = Array.from(map.values()).sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
+  const otherItems = ordered.filter((cat) => isOtherItemsCategory(cat));
+  const withoutOtherItems = ordered.filter((cat) => !isOtherItemsCategory(cat));
+  return [...withoutOtherItems, ...otherItems];
 };
 
 export function CategoryManagementModal({
@@ -71,6 +83,10 @@ export function CategoryManagementModal({
   };
 
   const handleDeleteCategory = async (cat: Category) => {
+    if (isOtherItemsCategory(cat)) {
+      setCategoryMessage('This category is required and cannot be deleted.');
+      return;
+    }
     const confirmed = window.confirm('Delete this category?');
     if (!confirmed) return;
     try {
@@ -133,14 +149,18 @@ export function CategoryManagementModal({
                 categories.map((cat) => (
                   <div key={cat.id} className="flex items-center justify-between px-3 py-2 text-sm">
                     <span className="text-slate-800">{cat.name}</span>
-                    <button
-                      type="button"
-                      className="text-slate-500 hover:text-red-600"
-                      onClick={() => handleDeleteCategory(cat)}
-                      aria-label={`Delete ${cat.name}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    {isOtherItemsCategory(cat) ? (
+                      <span className="text-xs text-slate-400">Required</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-slate-500 hover:text-red-600"
+                        onClick={() => handleDeleteCategory(cat)}
+                        aria-label={`Delete ${cat.name}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 ))
               )}

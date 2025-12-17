@@ -11,10 +11,10 @@ const BASE_CATEGORY_ORDER: Category[] = [
   { id: 'wine-stopper', name: 'Wine Stoppers', slug: 'wine-stopper', showOnHomePage: true },
 ];
 
-const UNCATEGORIZED_CATEGORY: Category = {
-  id: 'uncategorized',
+const OTHER_ITEMS_CATEGORY: Category = {
+  id: 'other-items',
   name: 'Other Items',
-  slug: 'uncategorized',
+  slug: 'other-items',
   showOnHomePage: true,
 };
 
@@ -47,7 +47,13 @@ const orderCategorySummaries = (items: Category[]): Category[] => {
     .filter((item) => !used.has(normalize(item.slug)))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return [...ordered, ...remaining];
+  const combined = [...ordered, ...remaining];
+  const otherItemsKey = normalize(OTHER_ITEMS_CATEGORY.slug);
+  const isOtherItems = (item: Category) =>
+    normalize(item.slug) === otherItemsKey || normalize(item.name) === otherItemsKey;
+  const otherItems = combined.filter(isOtherItems);
+  const withoutOtherItems = combined.filter((item) => !isOtherItems(item));
+  return [...withoutOtherItems, ...otherItems];
 };
 
 const ensureCategoryDefaults = (category: Category): Category => ({
@@ -147,18 +153,20 @@ const buildCategoryLookups = (categoryList: Category[]) => {
   return { slugLookup, nameLookup };
 };
 
-const ensureUncategorizedCategory = (categories: Category[], products: Product[]): Category[] => {
-  const normalizedUncategorized = toSlug(UNCATEGORIZED_CATEGORY.slug);
-  const hasUncategorized = categories.some((cat) => toSlug(cat.slug) === normalizedUncategorized);
+const ensureOtherItemsCategory = (categories: Category[], products: Product[]): Category[] => {
+  const normalizedOtherItems = toSlug(OTHER_ITEMS_CATEGORY.slug);
+  const hasOtherItems = categories.some(
+    (cat) => toSlug(cat.slug) === normalizedOtherItems || toSlug(cat.name) === normalizedOtherItems
+  );
   const lookups = buildCategoryLookups(categories);
   const needsFallback = products.some((product) => {
     const resolution = resolveCategorySlugForProduct(product, categories, lookups);
     return !resolution.slug;
   });
 
-  if (hasUncategorized || !needsFallback) return categories;
+  if (hasOtherItems || !needsFallback) return categories;
 
-  return [...categories, UNCATEGORIZED_CATEGORY];
+  return [...categories, OTHER_ITEMS_CATEGORY];
 };
 
 const resolveCategorySlugForProduct = (
@@ -236,7 +244,11 @@ const CATEGORY_COPY: Record<string, { title: string; description: string }> = {
     title: 'WINE STOPPERS',
     description: 'Hand-crafted shell stoppers for your favorite bottles.',
   },
-  uncategorized: {
+  'other-items': {
+    title: 'OTHER ITEMS',
+    description: '',
+  },
+  'other items': {
     title: 'OTHER ITEMS',
     description: '',
   },
@@ -252,7 +264,7 @@ export function ShopPage() {
   const categoryList = useMemo(() => {
     const baseList = categories.length ? categories : deriveCategoriesFromProducts(products);
     const deduped = dedupeCategories(baseList);
-    const withFallback = ensureUncategorizedCategory(deduped, products);
+    const withFallback = ensureOtherItemsCategory(deduped, products);
     return orderCategorySummaries(dedupeCategories(withFallback));
   }, [categories, products]);
 
@@ -325,7 +337,7 @@ export function ShopPage() {
       groups[c.slug] = [];
     });
 
-    const fallbackSlug = UNCATEGORIZED_CATEGORY.slug;
+    const fallbackSlug = OTHER_ITEMS_CATEGORY.slug;
     const lookups = buildCategoryLookups(categoryList);
 
     products.forEach((product) => {
@@ -382,7 +394,7 @@ export function ShopPage() {
         <div className="flex flex-wrap justify-center gap-3 mb-8">
           {categoryList.map((category) => {
             const hasItems = (groupedProducts[category.slug] || []).length > 0;
-            if (category.slug === UNCATEGORIZED_CATEGORY.slug && !hasItems) {
+            if (category.slug === OTHER_ITEMS_CATEGORY.slug && !hasItems) {
               return null;
             }
             const isActive = activeCategorySlug === category.slug;
