@@ -73,8 +73,8 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
       <div className="p-3">
         <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-sm font-medium text-slate-900 truncate">{product.name}</h3>
-          <span className="text-sm font-semibold text-slate-900 whitespace-nowrap">{priceLabel}</span>
+          <h3 className="text-sm font-serif font-medium text-slate-900 truncate">{product.name}</h3>
+          <span className="text-sm font-serif font-medium text-slate-800 whitespace-nowrap">{priceLabel}</span>
         </div>
 
         {isSold && (

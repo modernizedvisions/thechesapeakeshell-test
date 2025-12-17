@@ -441,7 +441,7 @@ export function ShopPage() {
                       {copy?.title || category.name}
                     </h2>
                     {copy?.description && (
-                      <p className="mt-1 text-sm text-slate-600">{copy.description}</p>
+                      <p className="mt-1 text-sm font-serif font-medium text-slate-700">{copy.description}</p>
                     )}
                   </div>
                   <ProductGrid products={items} />
