@@ -170,18 +170,17 @@ export async function onRequestPost(context: {
     const emailResult = await sendEmail(
       {
         to: customerEmail,
-        subject: `Payment link for ${displayId}`,
+        subject: 'The Chesapeake Shell - Custom Order',
         html: `
           <div style="font-family: Inter, Arial, sans-serif; color: #0f172a; line-height: 1.5;">
-            <p style="margin: 0 0 12px;">Hello${order.customer_name ? ` ${order.customer_name}` : ''},</p>
-            <p style="margin: 0 0 12px;">Here is your payment link for custom order <strong>${displayId}</strong>.</p>
+            <p style="margin: 0 0 12px;">Here’s the secure payment link to <strong>YOUR</strong> custom order <strong>${displayId}</strong>.</p>
             <p style="margin: 0 0 12px;">Amount: <strong>$${(amount / 100).toFixed(2)}</strong> (shipping $${(shippingCents / 100).toFixed(2)} included at checkout)</p>
             <p style="margin: 0 0 12px;">Description: ${order.description || 'Custom order'}</p>
             <p style="margin: 0 0 12px;"><a href="${session.url}" style="color:#0f172a;">Pay securely via Stripe</a></p>
             <p style="margin: 0;">Thank you!</p>
           </div>
         `,
-        text: `Payment link for custom order ${displayId}\nAmount: $${(amount / 100).toFixed(
+        text: `Custom order ${displayId}\nAmount: $${(amount / 100).toFixed(
           2
         )}\nDescription: ${order.description || 'Custom order'}\nPay: ${session.url}`,
       },
