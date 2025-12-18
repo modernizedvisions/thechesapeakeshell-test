@@ -1,52 +1,50 @@
 import { ContactForm } from '../components/ContactForm';
-import { SocialSection } from '../components/SocialSection';
 
 export function AboutPage() {
   return (
     <div className="bg-white">
       <section className="py-16">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-8">About the Artist</h1>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <h1 className="text-4xl font-serif font-bold text-gray-900 mb-8">About the Artist</h1>
 
-          <div className="prose prose-lg max-w-none">
-            <p className="text-gray-600 mb-6">
-              Welcome to my creative space. Each piece you see here is crafted with dedication,
-              passion, and attention to detail. I believe in creating art that tells a story and
-              connects with people on a personal level.
-            </p>
+          <div className="grid gap-10 lg:grid-cols-2 items-start">
+            <div className="space-y-5 text-gray-700 order-2 lg:order-1">
+              <p className="text-lg text-gray-900">Hi, I’m so glad you’re here.</p>
+              <p>
+                I’m a lifelong Eastern Shore native, born and raised in Salisbury, Maryland. Growing up surrounded by
+                the water, shells, and coastal charm sparked a love for all things beach-inspired that has stayed with
+                me ever since.
+              </p>
+              <p>
+                By day, I work in healthcare — a field I’ve been part of for the past 18 years. Helping others has
+                always been a meaningful part of my life, but creating shell art gives me a creative escape and a chance
+                to slow down, recharge, and create something beautiful with my hands.
+              </p>
+              <p>
+                I’m also a proud wife and mom to two young children, ages 3 and 5, who keep life busy, joyful, and full
+                of love. Between work, family, and everyday life, my art is something I truly do for joy. Every piece is
+                made with care and inspired by the shoreline I grew up loving.
+              </p>
+              <p>
+                Thank you for being here and for supporting my passion. It truly means the world to me, and I hope each
+                shell brings a little happiness and coastal charm into your life.
+              </p>
+            </div>
 
-            <p className="text-gray-600 mb-6">
-              My journey as an artist began many years ago, and since then, I've been exploring
-              different techniques and materials to bring unique visions to life. Every creation
-              is an opportunity to express something meaningful and share it with the world.
-            </p>
-
-            <p className="text-gray-600 mb-6">
-              Many of my works are one-of-a-kind pieces, meaning when you purchase them, you're
-              getting something truly unique that no one else in the world will have. I take pride
-              in this personal approach to art and the special connection it creates between the
-              piece and its owner.
-            </p>
-
-            <h2 className="text-2xl font-bold text-gray-900 mt-12 mb-4">The Process</h2>
-            <p className="text-gray-600 mb-6">
-              Each piece goes through a careful creative process, from initial concept to final
-              execution. I work with high-quality materials and take the time needed to ensure
-              every detail is just right. This commitment to quality means that while production
-              may take time, the result is always worth the wait.
-            </p>
-
-            <h2 className="text-2xl font-bold text-gray-900 mt-12 mb-4">Custom Work</h2>
-            <p className="text-gray-600 mb-6">
-              Interested in a custom piece? I'm always excited to work on commissioned projects.
-              Feel free to reach out through the contact form below to discuss your ideas, and
-              we can create something special together.
-            </p>
+            <div className="w-full order-1 lg:order-2">
+              {/* Artist photo — replace src when image is provided */}
+              <div className="aspect-[4/5] w-full rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
+                <img
+                  src="https://files.reimage.dev/modernizedvisions/0cb5fb896e5f/original"
+                  alt="Artist portrait"
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
-
-      <SocialSection />
 
       <ContactForm />
     </div>
