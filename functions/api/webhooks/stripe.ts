@@ -12,6 +12,7 @@ import {
   renderOwnerNewSaleEmailText,
   type OwnerNewSaleItem,
 } from '../../_lib/ownerNewSaleEmail';
+import { resolveCustomEmailTotals, resolveStandardEmailTotals } from '../../_lib/emailTotals';
 import { calculateShippingCents } from '../../_lib/shipping';
 
 type D1PreparedStatement = {
@@ -289,6 +290,20 @@ export const onRequestPost = async (context: {
           imageUrl: item.imageUrl || undefined,
         }));
 
+        const totalsForEmail = resolveStandardEmailTotals({
+          session,
+          shippingCentsFromContext: shippingCents,
+          lineItems: session.line_items?.data || [],
+        });
+        console.log('[email totals raw]', {
+          kind: 'shop_customer',
+          orderId: insertResult.orderId,
+          displayOrderId: insertResult.displayOrderId,
+          subtotalCents: totalsForEmail.subtotalCents,
+          shippingCents: totalsForEmail.shippingCents,
+          totalCents: totalsForEmail.totalCents,
+        });
+
         const confirmationUrl =
           siteUrl ? `${siteUrl}/checkout/return?session_id=${session.id}` : `/checkout/return?session_id=${session.id}`;
         const orderLabel = insertResult.displayOrderId || insertResult.orderId;
@@ -304,9 +319,9 @@ export const onRequestPost = async (context: {
             customerEmail: customerEmail || undefined,
             shippingAddress: shippingAddressText || undefined,
             items: confirmationItems,
-            subtotal: session.amount_subtotal ?? 0,
-            shipping: shippingCents,
-            total: session.amount_total ?? 0,
+            subtotal: totalsForEmail.subtotalCents,
+            shipping: totalsForEmail.shippingCents,
+            total: totalsForEmail.totalCents,
             primaryCtaUrl: confirmationUrl,
             primaryCtaLabel: 'View order details',
           });
@@ -318,29 +333,29 @@ export const onRequestPost = async (context: {
             customerEmail: customerEmail || undefined,
             shippingAddress: shippingAddressText || undefined,
             items: confirmationItems,
-            subtotal: session.amount_subtotal ?? 0,
-            shipping: shippingCents,
-            total: session.amount_total ?? 0,
+            subtotal: totalsForEmail.subtotalCents,
+            shipping: totalsForEmail.shippingCents,
+            total: totalsForEmail.totalCents,
             primaryCtaUrl: confirmationUrl,
             primaryCtaLabel: 'View order details',
           });
 
-          const emailResult = await sendEmail(
-            {
-              to: customerEmail,
-              subject: `The Chesapeake Shell — Order Confirmed (${orderLabel})`,
-              html,
-              text,
-            },
-            env
-          );
-          if (!emailResult.ok) {
-            console.error('[stripe webhook] customer confirmation email failed', emailResult.error);
-          }
-        } catch (emailError) {
-          console.error('[stripe webhook] customer confirmation email error', emailError);
+        const emailResult = await sendEmail(
+          {
+            to: customerEmail,
+            subject: `The Chesapeake Shell — Order Confirmed (${orderLabel})`,
+            html,
+            text,
+          },
+          env
+        );
+        if (!emailResult.ok) {
+          console.error('[stripe webhook] customer confirmation email failed', emailResult.error);
         }
+      } catch (emailError) {
+        console.error('[stripe webhook] customer confirmation email error', emailError);
       }
+    }
 
       if (!ownerTo) {
         console.warn('[stripe webhook] owner email missing; skipping receipt email');
@@ -359,10 +374,23 @@ export const onRequestPost = async (context: {
           imageUrl: item.imageUrl || undefined,
         }));
 
+        const totalsForEmail = resolveStandardEmailTotals({
+          session,
+          shippingCentsFromContext: shippingCents,
+          lineItems: session.line_items?.data || [],
+        });
+        console.log('[email totals raw]', {
+          kind: 'shop_owner',
+          orderId: insertResult.orderId,
+          displayOrderId: insertResult.displayOrderId,
+          subtotalCents: totalsForEmail.subtotalCents,
+          shippingCents: totalsForEmail.shippingCents,
+          totalCents: totalsForEmail.totalCents,
+        });
         const totals = {
-          subtotal: formatMoney(session.amount_subtotal ?? 0),
-          shipping: formatMoney(shippingCents),
-          total: formatMoney(session.amount_total ?? 0),
+          subtotal: formatMoney(totalsForEmail.subtotalCents),
+          shipping: formatMoney(totalsForEmail.shippingCents),
+          total: formatMoney(totalsForEmail.totalCents),
         };
         const adminUrl = siteUrl ? `${siteUrl}/admin` : '/admin';
         const stripeUrl = buildStripeDashboardUrl(paymentIntentId, session.id, env.STRIPE_SECRET_KEY);
@@ -1027,6 +1055,23 @@ async function handleCustomOrderPayment(args: {
       : `/checkout/return?session_id=${session.id}`;
     const orderDate = formatOrderDate(new Date());
     const shippingAddressText = formatShippingAddress(shippingAddress);
+    const totalsForEmail = resolveCustomEmailTotals({
+      order: {
+        total_cents: totalCents,
+        amount_cents: totalCents,
+        shipping_cents: shippingCents,
+      },
+      shippingCentsFromContext: shippingCents,
+      session,
+    });
+    console.log('[email totals raw]', {
+      kind: 'custom_customer',
+      orderId: insertResult.orderId,
+      displayOrderId: insertResult.displayOrderId,
+      subtotalCents: totalsForEmail.subtotalCents,
+      shippingCents: totalsForEmail.shippingCents,
+      totalCents: totalsForEmail.totalCents,
+    });
     const confirmationItems: OrderConfirmationEmailItem[] = [
       {
         name: customOrder.description || 'Custom order',
@@ -1046,9 +1091,9 @@ async function handleCustomOrderPayment(args: {
         customerEmail: confirmationCustomerEmail || undefined,
         shippingAddress: shippingAddressText || undefined,
         items: confirmationItems,
-        subtotal: amount,
-        shipping: shippingCents,
-        total: totalCents,
+        subtotal: totalsForEmail.subtotalCents,
+        shipping: totalsForEmail.shippingCents,
+        total: totalsForEmail.totalCents,
         primaryCtaUrl: confirmationUrl,
         primaryCtaLabel: 'View order details',
       });
@@ -1060,9 +1105,9 @@ async function handleCustomOrderPayment(args: {
         customerEmail: confirmationCustomerEmail || undefined,
         shippingAddress: shippingAddressText || undefined,
         items: confirmationItems,
-        subtotal: amount,
-        shipping: shippingCents,
-        total: totalCents,
+        subtotal: totalsForEmail.subtotalCents,
+        shipping: totalsForEmail.shippingCents,
+        total: totalsForEmail.totalCents,
         primaryCtaUrl: confirmationUrl,
         primaryCtaLabel: 'View order details',
       });
@@ -1101,10 +1146,27 @@ async function handleCustomOrderPayment(args: {
       imageUrl: null,
     },
   ];
+  const totalsForOwner = resolveCustomEmailTotals({
+    order: {
+      total_cents: totalCents,
+      amount_cents: totalCents,
+      shipping_cents: shippingCents,
+    },
+    shippingCentsFromContext: shippingCents,
+    session,
+  });
+  console.log('[email totals raw]', {
+    kind: 'custom_owner',
+    orderId: insertResult.orderId,
+    displayOrderId: insertResult.displayOrderId,
+    subtotalCents: totalsForOwner.subtotalCents,
+    shippingCents: totalsForOwner.shippingCents,
+    totalCents: totalsForOwner.totalCents,
+  });
   const ownerTotals = {
-    subtotal: formatMoney(amount),
-    shipping: formatMoney(shippingCents),
-    total: formatMoney(totalCents),
+    subtotal: formatMoney(totalsForOwner.subtotalCents),
+    shipping: formatMoney(totalsForOwner.shippingCents),
+    total: formatMoney(totalsForOwner.totalCents),
   };
   const shippingLines = formatShippingAddressLines(shippingAddress);
   const orderDate = formatOrderDate(new Date());
