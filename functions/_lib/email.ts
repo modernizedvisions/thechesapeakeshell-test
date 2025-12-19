@@ -9,6 +9,7 @@ export type SendEmailArgs = {
 
 export type EmailEnv = {
   RESEND_API_KEY?: string;
+  RESEND_FROM?: string;
   RESEND_FROM_EMAIL?: string;
   RESEND_REPLY_TO?: string;
   RESEND_REPLY_TO_EMAIL?: string;
@@ -25,14 +26,19 @@ export type EmailAttachment = {
   contentType?: string;
 };
 
+export const DEFAULT_FROM_EMAIL = 'The Chesapeake Shell <hello@thechesapeakeshell.com>';
+
+export function resolveFromEmail(env: EmailEnv): string {
+  return env.RESEND_FROM || env.RESEND_FROM_EMAIL || env.EMAIL_FROM || DEFAULT_FROM_EMAIL;
+}
+
 export async function sendEmail(
   args: SendEmailArgs,
   env: EmailEnv
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const apiKey = env.RESEND_API_KEY;
-  const from = env.RESEND_FROM_EMAIL || env.EMAIL_FROM || 'onboarding@resend.dev';
+  const from = resolveFromEmail(env);
   const replyTo = env.RESEND_REPLY_TO || env.RESEND_REPLY_TO_EMAIL || args.replyTo;
-  const hasAttachment = !!(args.attachments && args.attachments.length);
 
   if (!apiKey || !from) {
     return {
@@ -49,12 +55,7 @@ export async function sendEmail(
   }
 
   try {
-    console.log('[email] sendEmail: start', {
-      to: args.to,
-      from,
-      subject: args.subject,
-      hasAttachment,
-    });
+    console.log('[email]', { from, to: args.to, subject: args.subject });
 
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',

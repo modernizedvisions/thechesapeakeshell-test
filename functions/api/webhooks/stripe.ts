@@ -26,6 +26,7 @@ type Env = {
   EMAIL_OWNER_TO?: string;
   EMAIL_FROM?: string;
   RESEND_OWNER_TO?: string;
+  RESEND_FROM?: string;
   RESEND_FROM_EMAIL?: string;
   RESEND_REPLY_TO?: string;
   RESEND_API_KEY?: string;

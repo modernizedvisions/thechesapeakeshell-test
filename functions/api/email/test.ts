@@ -1,5 +1,4 @@
-import { sendEmail } from '../../_lib/email';
-import type { EmailEnv } from '../../_lib/email';
+import { resolveFromEmail, sendEmail, type EmailEnv } from '../../_lib/email';
 import { renderOwnerNewOrderEmail } from '../../_lib/emailTemplates';
 
 type TestBody = {
@@ -18,7 +17,7 @@ export async function onRequestPost(context: { request: Request; env: EmailEnv }
   }
 
   const hasKey = !!env.RESEND_API_KEY;
-  const from = env.RESEND_FROM_EMAIL || env.EMAIL_FROM || 'onboarding@resend.dev';
+  const from = resolveFromEmail(env);
   if (!hasKey || !from) {
     return json(
       {

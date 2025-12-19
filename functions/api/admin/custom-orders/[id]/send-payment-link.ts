@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { sendEmail } from '../../../../_lib/email';
+import { resolveFromEmail, sendEmail } from '../../../../_lib/email';
 
 type D1PreparedStatement = {
   all<T>(): Promise<{ results: T[] }>;
@@ -55,6 +55,7 @@ export async function onRequestPost(context: {
     PUBLIC_SITE_URL?: string;
     VITE_PUBLIC_SITE_URL?: string;
     RESEND_API_KEY?: string;
+    RESEND_FROM?: string;
     RESEND_FROM_EMAIL?: string;
     RESEND_REPLY_TO?: string;
     EMAIL_FROM?: string;
@@ -70,12 +71,12 @@ export async function onRequestPost(context: {
   if (!id) return jsonResponse({ error: 'Missing id' }, 400);
 
   const hasResend = !!env.RESEND_API_KEY;
-  const fromEmail = env.RESEND_FROM_EMAIL || env.EMAIL_FROM;
+  const fromEmail = resolveFromEmail(env);
   if (!hasResend) {
     return jsonResponse({ error: 'Failed to send payment link', detail: 'Missing RESEND_API_KEY' }, 500);
   }
   if (!fromEmail) {
-    return jsonResponse({ error: 'Failed to send payment link', detail: 'Missing RESEND_FROM_EMAIL/EMAIL_FROM' }, 500);
+    return jsonResponse({ error: 'Failed to send payment link', detail: 'Missing RESEND_FROM' }, 500);
   }
 
   try {
