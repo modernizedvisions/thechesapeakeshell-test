@@ -11,21 +11,27 @@ type D1Database = {
 
 type GalleryRow = {
   id: string;
+  url?: string | null;
   image_url: string | null;
   alt_text?: string | null;
   is_active?: number | null;
   position?: number | null;
+  sort_order?: number | null;
+  hidden?: number | null;
   created_at?: string | null;
 };
 
 const createGalleryTable = `
   CREATE TABLE IF NOT EXISTS gallery_images (
     id TEXT PRIMARY KEY,
-    image_url TEXT NOT NULL,
+    url TEXT NOT NULL,
+    image_url TEXT,
     alt_text TEXT,
+    hidden INTEGER NOT NULL DEFAULT 0,
     is_active INTEGER DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
     position INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 `;
 
@@ -34,18 +40,18 @@ export async function onRequestGet(context: { env: { DB?: D1Database }; request:
     const db = context.env.DB;
     if (!db) {
       console.error('[api/gallery][get] missing DB binding');
-      return jsonError('Database unavailable', 500);
+      return json({ error: 'missing_d1_binding', hint: 'Bind D1 as DB in Cloudflare Pages' }, 500);
     }
-    await ensureGallerySchema(db);
+    const schemaInfo = await ensureGallerySchema(db);
     const { results } = await db
       .prepare(
-        `SELECT id, image_url, alt_text, is_active, position, created_at
+        `SELECT id, url, image_url, alt_text, hidden, is_active, sort_order, position, created_at
          FROM gallery_images
-         ORDER BY position ASC, created_at ASC;`
+         ORDER BY sort_order ASC, created_at ASC;`
       )
       .all<GalleryRow>();
 
-    const images = (results || []).map(mapRowToImage).filter(Boolean);
+    const images = (results || []).map((row) => mapRowToImage(row, schemaInfo)).filter(Boolean);
     console.log('[api/gallery][get] fetched', { count: images.length });
 
     return new Response(JSON.stringify({ images }), {
@@ -53,11 +59,8 @@ export async function onRequestGet(context: { env: { DB?: D1Database }; request:
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    console.error('[api/gallery][get] Failed to load gallery images', {
-      message: (error as any)?.message,
-      stack: (error as any)?.stack,
-    });
-    return jsonError('Failed to load gallery images', 500);
+    console.error('[api/gallery][get] failed', { message: (error as any)?.message, stack: (error as any)?.stack });
+    return json({ error: 'gallery_fetch_failed', detail: (error as any)?.message || 'unknown' }, 500);
   }
 }
 
@@ -67,10 +70,10 @@ export async function onRequestPut(context: { env: { DB?: D1Database }; request:
     const contentType = context.request.headers.get('content-type');
     if (!db) {
       console.error('[api/gallery] missing DB binding');
-      return jsonError('Database unavailable', 500);
+      return json({ error: 'missing_d1_binding', hint: 'Bind D1 as DB in Cloudflare Pages' }, 500);
     }
 
-    await ensureGallerySchema(db);
+    const schemaInfo = await ensureGallerySchema(db);
 
     let body: any = null;
     try {
@@ -80,58 +83,79 @@ export async function onRequestPut(context: { env: { DB?: D1Database }; request:
         message: (parseError as any)?.message,
         contentType,
       });
-      return jsonError('Invalid JSON payload', 400);
+      return json({ error: 'invalid_json_payload' }, 400);
     }
 
     const images = Array.isArray(body?.images) ? body.images : [];
-    console.log('[api/gallery] saving images', {
-      count: images.length,
-      contentType,
-      firstPrefix: images[0]?.imageUrl ? String(images[0].imageUrl).slice(0, 32) : null,
-      firstLength: images[0]?.imageUrl ? String(images[0].imageUrl).length : 0,
-    });
+    console.log('[api/gallery] payload keys', Object.keys(body || {}), 'count', images.length);
 
-    // Overwrite-all approach keeps ordering simple for now.
+    const normalized = images
+      .map((img: any, idx: number) => {
+        const url = typeof img?.imageUrl === 'string' ? img.imageUrl : typeof img?.url === 'string' ? img.url : null;
+        if (!url) return null;
+        return {
+          id: img.id || safeId(`gallery-${idx}`),
+          url,
+          alt: img.alt || img.title || null,
+          hidden: !!img.hidden,
+          sortOrder: Number.isFinite(img.position) ? Number(img.position) : idx,
+          createdAt: img.createdAt || new Date().toISOString(),
+        };
+      })
+      .filter(Boolean) as {
+      id: string;
+      url: string;
+      alt: string | null;
+      hidden: boolean;
+      sortOrder: number;
+      createdAt: string;
+    }[];
+
+    await db.prepare('BEGIN TRANSACTION;').run();
     await db.prepare(`DELETE FROM gallery_images;`).run();
 
-    for (let i = 0; i < images.length; i++) {
-      const img = images[i];
-      if (!img?.imageUrl || typeof img.imageUrl !== 'string') continue;
-      const id = img.id || safeId(`gallery-${i}`);
+    for (let i = 0; i < normalized.length; i++) {
+      const img = normalized[i];
       try {
         await db
           .prepare(
-            `INSERT INTO gallery_images (id, image_url, alt_text, is_active, position, created_at)
-           VALUES (?, ?, ?, ?, ?, ?);`
+            `INSERT INTO gallery_images (id, url, image_url, alt_text, hidden, is_active, sort_order, position, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`
           )
           .bind(
-            id,
-            img.imageUrl,
-            img.alt || img.title || null,
+            img.id,
+            img.url,
+            img.url,
+            img.alt,
+            img.hidden ? 1 : 0,
             img.hidden ? 0 : 1,
-            Number.isFinite(img.position) ? img.position : i,
-            img.createdAt || new Date().toISOString()
+            img.sortOrder,
+            img.sortOrder,
+            img.createdAt
           )
           .run();
       } catch (err) {
         console.error('[api/gallery] insert failed', {
           message: (err as any)?.message,
           idx: i,
-          id,
+          id: img.id,
         });
+        await db.prepare('ROLLBACK;').run();
         throw err;
       }
     }
 
+    await db.prepare('COMMIT;').run();
+
     const refreshed = await db
       .prepare(
-        `SELECT id, image_url, alt_text, is_active, position, created_at
+        `SELECT id, url, image_url, alt_text, hidden, is_active, sort_order, position, created_at
          FROM gallery_images
-         ORDER BY position ASC, created_at ASC;`
+         ORDER BY sort_order ASC, created_at ASC;`
       )
       .all<GalleryRow>();
 
-    const savedImages = (refreshed.results || []).map(mapRowToImage).filter(Boolean);
+    const savedImages = (refreshed.results || []).map((row) => mapRowToImage(row, schemaInfo)).filter(Boolean);
     console.log('[api/gallery] saved', { count: savedImages.length });
 
     return new Response(JSON.stringify({ images: savedImages }), {
@@ -139,32 +163,84 @@ export async function onRequestPut(context: { env: { DB?: D1Database }; request:
       headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    console.error('[api/gallery] Failed to save gallery images', {
-      message: (error as any)?.message,
-      stack: (error as any)?.stack,
-    });
-    return jsonError('Failed to save gallery images', 500);
+    console.error('[api/gallery] failed', { message: (error as any)?.message, stack: (error as any)?.stack });
+    return json({ error: 'gallery_save_failed', detail: (error as any)?.message || 'unknown' }, 500);
   }
 }
 
 // Allow POST as a convenience in case clients mis-send the verb.
 export const onRequestPost = onRequestPut;
 
-function mapRowToImage(row: GalleryRow | null | undefined) {
-  if (!row?.id || !row.image_url) return null;
+function mapRowToImage(row: GalleryRow | null | undefined, _schema: SchemaInfo) {
+  if (!row?.id) return null;
+  const url = row.url || row.image_url;
+  if (!url) return null;
+  const hidden = row.hidden !== undefined && row.hidden !== null ? row.hidden === 1 : row.is_active === 0;
+  const position = Number.isFinite(row.sort_order) ? (row.sort_order as number) : row.position ?? 0;
   return {
     id: row.id,
-    imageUrl: row.image_url,
+    imageUrl: url,
     alt: row.alt_text || undefined,
     title: row.alt_text || undefined,
-    hidden: row.is_active === 0,
-    position: row.position ?? 0,
+    hidden,
+    position,
     createdAt: row.created_at || undefined,
   };
 }
 
-async function ensureGallerySchema(db: D1Database) {
+type SchemaInfo = {
+  hasUrl: boolean;
+  hasImageUrl: boolean;
+  hasHidden: boolean;
+  hasSortOrder: boolean;
+  hasIsActive: boolean;
+};
+
+async function ensureGallerySchema(db: D1Database): Promise<SchemaInfo> {
   await db.prepare(createGalleryTable).run();
+  const { results } = await db.prepare(`PRAGMA table_info(gallery_images);`).all<{ name: string }>();
+  const names = new Set((results || []).map((c) => c.name));
+
+  const addColumnIfMissing = async (name: string, ddl: string) => {
+    if (!names.has(name)) {
+      await db.prepare(`ALTER TABLE gallery_images ADD COLUMN ${ddl};`).run();
+      names.add(name);
+    }
+  };
+
+  await addColumnIfMissing('url', 'url TEXT');
+  await addColumnIfMissing('image_url', 'image_url TEXT');
+  await addColumnIfMissing('alt_text', 'alt_text TEXT');
+  await addColumnIfMissing('hidden', 'hidden INTEGER NOT NULL DEFAULT 0');
+  await addColumnIfMissing('is_active', 'is_active INTEGER DEFAULT 1');
+  await addColumnIfMissing('sort_order', 'sort_order INTEGER NOT NULL DEFAULT 0');
+  await addColumnIfMissing('position', 'position INTEGER DEFAULT 0');
+  await addColumnIfMissing('created_at', 'created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
+
+  // Backfill url from image_url if needed
+  await db
+    .prepare(`UPDATE gallery_images SET url = image_url WHERE (url IS NULL OR url = '') AND image_url IS NOT NULL;`)
+    .run();
+  // Backfill hidden from is_active if needed
+  await db
+    .prepare(
+      `UPDATE gallery_images SET hidden = CASE WHEN is_active = 0 THEN 1 ELSE 0 END WHERE hidden IS NULL OR hidden NOT IN (0,1);`
+    )
+    .run();
+  // Backfill sort_order from position if needed
+  await db
+    .prepare(
+      `UPDATE gallery_images SET sort_order = COALESCE(sort_order, position, 0) WHERE sort_order IS NULL;`
+    )
+    .run();
+
+  return {
+    hasUrl: names.has('url'),
+    hasImageUrl: names.has('image_url'),
+    hasHidden: names.has('hidden'),
+    hasSortOrder: names.has('sort_order'),
+    hasIsActive: names.has('is_active'),
+  };
 }
 
 function safeId(fallback: string) {
@@ -178,8 +254,8 @@ function safeId(fallback: string) {
   return `${fallback}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
-function jsonError(message: string, status = 500) {
-  return new Response(JSON.stringify({ error: message }), {
+function json(data: unknown, status = 200) {
+  return new Response(JSON.stringify(data), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });

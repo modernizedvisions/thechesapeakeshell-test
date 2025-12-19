@@ -69,7 +69,16 @@ export async function saveGalleryImages(images: any[]) {
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ images }),
   });
-  if (!response.ok) throw new Error(`Save gallery API responded with ${response.status}`);
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const data = await response.json();
+      detail = data?.detail || data?.error || '';
+    } catch {
+      detail = '';
+    }
+    throw new Error(`Save gallery API responded with ${response.status}${detail ? `: ${detail}` : ''}`);
+  }
   const data = await response.json();
   return Array.isArray(data.images) ? data.images : [];
 }
