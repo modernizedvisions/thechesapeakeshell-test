@@ -1,6 +1,11 @@
 import Stripe from 'stripe';
 import { sendEmail } from '../../_lib/email';
 import {
+  renderOrderConfirmationEmailHtml,
+  renderOrderConfirmationEmailText,
+  type OrderConfirmationEmailItem,
+} from '../../_lib/orderConfirmationEmail';
+import {
   renderOwnerCustomOrderPaidEmail,
   renderOwnerInvoicePaidEmail,
   renderOwnerNewOrderEmail,
@@ -267,6 +272,74 @@ export const onRequestPost = async (context: {
         productId,
         quantityFromMeta,
       });
+
+      if (insertResult && customerEmail) {
+        const confirmationItems: OrderConfirmationEmailItem[] = mapLineItemsToEmailItems(
+          session.line_items?.data || [],
+          session.currency || 'usd'
+        ).map((item) => ({
+          name: item.name,
+          qty: item.quantity,
+          unitAmount:
+            item.quantity && item.quantity > 0
+              ? Math.round((item.amountCents || 0) / item.quantity)
+              : item.amountCents || 0,
+          lineTotal: item.amountCents || 0,
+          imageUrl: item.imageUrl || undefined,
+        }));
+
+        const confirmationUrl =
+          siteUrl ? `${siteUrl}/checkout/return?session_id=${session.id}` : `/checkout/return?session_id=${session.id}`;
+        const orderLabel = insertResult.displayOrderId || insertResult.orderId;
+        const orderDate = formatOrderDate(new Date());
+        const shippingAddressText = formatShippingAddress(shippingAddress);
+
+        try {
+          const html = renderOrderConfirmationEmailHtml({
+            brandName: 'The Chesapeake Shell',
+            orderNumber: orderLabel,
+            orderDate,
+            customerName: shippingName || session.customer_details?.name || null,
+            customerEmail: customerEmail || undefined,
+            shippingAddress: shippingAddressText || undefined,
+            items: confirmationItems,
+            subtotal: session.amount_subtotal ?? 0,
+            shipping: shippingCents,
+            total: session.amount_total ?? 0,
+            primaryCtaUrl: confirmationUrl,
+            primaryCtaLabel: 'View order details',
+          });
+          const text = renderOrderConfirmationEmailText({
+            brandName: 'The Chesapeake Shell',
+            orderNumber: orderLabel,
+            orderDate,
+            customerName: shippingName || session.customer_details?.name || null,
+            customerEmail: customerEmail || undefined,
+            shippingAddress: shippingAddressText || undefined,
+            items: confirmationItems,
+            subtotal: session.amount_subtotal ?? 0,
+            shipping: shippingCents,
+            total: session.amount_total ?? 0,
+            primaryCtaUrl: confirmationUrl,
+            primaryCtaLabel: 'View order details',
+          });
+
+          const emailResult = await sendEmail(
+            {
+              to: customerEmail,
+              subject: `The Chesapeake Shell — Order Confirmed (${orderLabel})`,
+              html,
+              text,
+            },
+            env
+          );
+          if (!emailResult.ok) {
+            console.error('[stripe webhook] customer confirmation email failed', emailResult.error);
+          }
+        } catch (emailError) {
+          console.error('[stripe webhook] customer confirmation email error', emailError);
+        }
+      }
 
       if (!ownerTo) {
         console.warn('[stripe webhook] owner email missing; skipping receipt email');
@@ -907,6 +980,73 @@ async function handleCustomOrderPayment(args: {
     totalCentsOverride: totalCents,
   });
 
+  const confirmationCustomerEmail = customerEmail || customOrder.customer_email || null;
+  const orderLabel = displayId || insertResult?.displayOrderId || insertResult?.orderId || displayId;
+
+  if (insertResult && confirmationCustomerEmail) {
+    const siteUrlForConfirmation = resolveSiteUrl(env);
+    const confirmationUrl = siteUrlForConfirmation
+      ? `${siteUrlForConfirmation}/checkout/return?session_id=${session.id}`
+      : `/checkout/return?session_id=${session.id}`;
+    const orderDate = formatOrderDate(new Date());
+    const shippingAddressText = formatShippingAddress(shippingAddress);
+    const confirmationItems: OrderConfirmationEmailItem[] = [
+      {
+        name: customOrder.description || 'Custom order',
+        qty: 1,
+        unitAmount: amount,
+        lineTotal: amount,
+        imageUrl: null,
+      },
+    ];
+
+    try {
+      const html = renderOrderConfirmationEmailHtml({
+        brandName: 'The Chesapeake Shell',
+        orderNumber: orderLabel,
+        orderDate,
+        customerName: customOrder.customer_name || shippingName || session.customer_details?.name || null,
+        customerEmail: confirmationCustomerEmail || undefined,
+        shippingAddress: shippingAddressText || undefined,
+        items: confirmationItems,
+        subtotal: amount,
+        shipping: shippingCents,
+        total: totalCents,
+        primaryCtaUrl: confirmationUrl,
+        primaryCtaLabel: 'View order details',
+      });
+      const text = renderOrderConfirmationEmailText({
+        brandName: 'The Chesapeake Shell',
+        orderNumber: orderLabel,
+        orderDate,
+        customerName: customOrder.customer_name || shippingName || session.customer_details?.name || null,
+        customerEmail: confirmationCustomerEmail || undefined,
+        shippingAddress: shippingAddressText || undefined,
+        items: confirmationItems,
+        subtotal: amount,
+        shipping: shippingCents,
+        total: totalCents,
+        primaryCtaUrl: confirmationUrl,
+        primaryCtaLabel: 'View order details',
+      });
+
+      const emailResult = await sendEmail(
+        {
+          to: confirmationCustomerEmail,
+          subject: `The Chesapeake Shell — Order Confirmed (${orderLabel})`,
+          html,
+          text,
+        },
+        env
+      );
+      if (!emailResult.ok) {
+        console.error('[custom order] customer confirmation email failed', emailResult.error);
+      }
+    } catch (emailError) {
+      console.error('[custom order] customer confirmation email error', emailError);
+    }
+  }
+
   const ownerTo = env.RESEND_OWNER_TO || env.EMAIL_OWNER_TO;
   if (!ownerTo) {
     console.warn('[custom order] owner email missing; skipping receipt email');
@@ -915,7 +1055,6 @@ async function handleCustomOrderPayment(args: {
 
   if (!insertResult) return;
 
-  const orderLabel = displayId || insertResult.displayOrderId || insertResult.orderId;
   const totalLabel = formatAmount(totalCents, session.currency || 'usd');
   const adminLink = (env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '').replace(/\/+$/, '') + '/admin';
 
@@ -1161,4 +1300,39 @@ async function insertStandardOrderAndItems(args: {
   }
 
   return { orderId, displayOrderId };
+}
+
+function formatOrderDate(date: Date): string {
+  try {
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  } catch {
+    return date.toISOString();
+  }
+}
+
+function formatShippingAddress(address: Stripe.Address | Stripe.ShippingAddress | null): string {
+  if (!address) return '';
+  const parts = [
+    address.name,
+    address.line1,
+    address.line2,
+    [address.city, address.state].filter(Boolean).join(', '),
+    address.postal_code,
+    address.country,
+  ]
+    .map((p) => (p || '').trim())
+    .filter(Boolean);
+  return parts.join(', ');
+}
+
+function resolveSiteUrl(env: {
+  PUBLIC_SITE_URL?: string;
+  VITE_PUBLIC_SITE_URL?: string;
+}) {
+  const raw = env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '';
+  return raw ? raw.replace(/\/+$/, '') : '';
 }
