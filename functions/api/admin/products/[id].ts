@@ -169,6 +169,21 @@ export async function onRequestPut(context: {
       });
     }
 
+    const hasDataUrl = (value?: string | null) =>
+      typeof value === 'string' && value.trim().toLowerCase().startsWith('data:image/');
+    const hasDataUrlInArray = (value?: string[] | null) =>
+      Array.isArray(value) && value.some((entry) => hasDataUrl(entry));
+
+    if (hasDataUrl(body.imageUrl) || hasDataUrlInArray(body.imageUrls)) {
+      return new Response(
+        JSON.stringify({ error: 'Images must be uploaded first; only URLs allowed.' }),
+        {
+          status: 413,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     const sets: string[] = [];
     const values: unknown[] = [];
 
@@ -238,8 +253,9 @@ export async function onRequestPut(context: {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Failed to update product', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error('Failed to update product', { detail, id: context.params?.id });
+    return new Response(JSON.stringify({ error: 'Update product failed', detail }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

@@ -11,6 +11,7 @@ import {
   adminCreateProduct,
   adminUpdateProduct,
   adminDeleteProduct,
+  adminUploadImage,
 } from '../lib/api';
 import { CustomOrdersImage, GalleryImage, HeroCollageImage, HeroConfig, Product } from '../lib/types';
 import type { AdminOrder } from '../lib/db/orders';
@@ -50,6 +51,9 @@ export type ManagedImage = {
   file?: File;
   isPrimary: boolean;
   isNew?: boolean;
+  uploading?: boolean;
+  uploadError?: string;
+  cloudflareId?: string;
 };
 
 const normalizeCategoryValue = (value: string | undefined | null) => (value || '').trim();
@@ -300,6 +304,45 @@ export function AdminPage() {
     setProductImages([]);
   };
 
+  const uploadManagedImage = async (
+    id: string,
+    file: File,
+    previewUrl: string,
+    setImages: React.Dispatch<React.SetStateAction<ManagedImage[]>>
+  ) => {
+    try {
+      const result = await adminUploadImage(file);
+      URL.revokeObjectURL(previewUrl);
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === id
+            ? {
+                ...img,
+                url: result.url,
+                cloudflareId: result.id,
+                file: undefined,
+                uploading: false,
+                uploadError: undefined,
+              }
+            : img
+        )
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === id
+            ? {
+                ...img,
+                uploading: false,
+                uploadError: message,
+              }
+            : img
+        )
+      );
+    }
+  };
+
   const addImages = (
     files: FileList | null,
     setImages: React.Dispatch<React.SetStateAction<ManagedImage[]>>,
@@ -307,6 +350,8 @@ export function AdminPage() {
   ) => {
     if (!files) return;
     const incoming = Array.from(files);
+    const uploads: Array<{ id: string; file: File; previewUrl: string }> = [];
+
     setImages((prev) => {
       const maxSlots = 4;
       const selected = incoming.slice(0, maxSlots);
@@ -317,12 +362,16 @@ export function AdminPage() {
         const start = Math.min(slotIndex, maxSlots - 1);
         selected.forEach((file, offset) => {
           const pos = Math.min(start + offset, maxSlots - 1);
+          const previewUrl = URL.createObjectURL(file);
+          const id = crypto.randomUUID();
+          uploads.push({ id, file, previewUrl });
           const newEntry: ManagedImage = {
-            id: crypto.randomUUID(),
-            url: URL.createObjectURL(file),
+            id,
+            url: previewUrl,
             file,
             isPrimary: false,
             isNew: true,
+            uploading: true,
           };
           result[pos] = newEntry;
         });
@@ -330,13 +379,19 @@ export function AdminPage() {
         // Default behavior: append into remaining slots
         const remaining = Math.max(0, maxSlots - result.length);
         if (remaining === 0) return result;
-        const toAdd = selected.slice(0, remaining).map((file) => ({
-          id: crypto.randomUUID(),
-          url: URL.createObjectURL(file),
-          file,
-          isPrimary: false,
-          isNew: true,
-        }));
+        const toAdd = selected.slice(0, remaining).map((file) => {
+          const previewUrl = URL.createObjectURL(file);
+          const id = crypto.randomUUID();
+          uploads.push({ id, file, previewUrl });
+          return {
+            id,
+            url: previewUrl,
+            file,
+            isPrimary: false,
+            isNew: true,
+            uploading: true,
+          } as ManagedImage;
+        });
         result = [...result, ...toAdd];
       }
 
@@ -349,6 +404,10 @@ export function AdminPage() {
       }
 
       return result;
+    });
+
+    uploads.forEach(({ id, file, previewUrl }) => {
+      void uploadManagedImage(id, file, previewUrl, setImages);
     });
   };
 
@@ -395,19 +454,8 @@ export function AdminPage() {
   };
 
   const uploadImage = async (file: File): Promise<string> => {
-    // TODO: In future, move from base64 data URLs to real storage (e.g., R2) and restore a real upload endpoint.
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result);
-        } else {
-          reject(new Error('Failed to read image as data URL'));
-        }
-      };
-      reader.onerror = () => reject(new Error('Failed to read image file'));
-      reader.readAsDataURL(file);
-    });
+    const result = await adminUploadImage(file);
+    return result.url;
   };
 
   const resolveImageUrls = async (images: ManagedImage[]): Promise<{ imageUrl: string; imageUrls: string[] }> => {
@@ -426,6 +474,9 @@ export function AdminPage() {
     const primary = urls[0] || '';
     return { imageUrl: primary, imageUrls: urls };
   };
+
+  const hasPendingUploads = (images: ManagedImage[]) => images.some((img) => img.uploading);
+  const hasUploadErrors = (images: ManagedImage[]) => images.some((img) => img.uploadError);
 
   const startEditProduct = (product: Product) => {
     setEditProductId(product.id);
@@ -452,6 +503,19 @@ export function AdminPage() {
     setProductStatus({ type: null, message: '' });
 
     try {
+      if (hasPendingUploads(productImages)) {
+        setProductStatus({ type: 'error', message: 'Images are still uploading. Please wait.' });
+        setProductSaveState('error');
+        setTimeout(() => setProductSaveState('idle'), 1500);
+        return;
+      }
+      if (hasUploadErrors(productImages)) {
+        setProductStatus({ type: 'error', message: 'One or more images failed to upload.' });
+        setProductSaveState('error');
+        setTimeout(() => setProductSaveState('idle'), 1500);
+        return;
+      }
+
       const hasAtLeastOneImage = Array.isArray(productImages) && productImages.length > 0;
       if (!hasAtLeastOneImage) {
         setProductStatus({ type: 'error', message: 'Add an image to save a product.' });
@@ -497,6 +561,19 @@ export function AdminPage() {
     setProductStatus({ type: null, message: '' });
 
     try {
+      if (hasPendingUploads(editProductImages)) {
+        setProductStatus({ type: 'error', message: 'Images are still uploading. Please wait.' });
+        setEditProductSaveState('error');
+        setTimeout(() => setEditProductSaveState('idle'), 1500);
+        return false;
+      }
+      if (hasUploadErrors(editProductImages)) {
+        setProductStatus({ type: 'error', message: 'One or more images failed to upload.' });
+        setEditProductSaveState('error');
+        setTimeout(() => setEditProductSaveState('idle'), 1500);
+        return false;
+      }
+
       const manualUrls = mergeManualImages(editProductForm);
       const uploaded = editProductImages.length > 0 ? await resolveImageUrls(editProductImages) : manualUrls;
       const mergedImages = mergeImages(uploaded, manualUrls);

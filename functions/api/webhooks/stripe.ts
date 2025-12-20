@@ -56,6 +56,11 @@ export const onRequestPost = async (context: {
   const { request, env } = context;
   const ownerTo = env.RESEND_OWNER_TO || env.EMAIL_OWNER_TO;
   const siteUrl = (env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+  const ok = () =>
+    new Response(JSON.stringify({ received: true }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
 
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
     console.error('Stripe secrets are not configured');
@@ -87,7 +92,8 @@ export const onRequestPost = async (context: {
   console.log('[stripe webhook] received event', { type: event.type, id: event.id });
 
   try {
-    if (event.type === 'checkout.session.completed') {
+    switch (event.type) {
+      case 'checkout.session.completed': {
       const sessionSummary = event.data.object as Stripe.Checkout.Session;
       console.log('[stripe webhook] checkout.session.completed', { sessionId: sessionSummary.id });
       const stripeClient = createStripeClient(env.STRIPE_SECRET_KEY);
@@ -446,6 +452,27 @@ export const onRequestPost = async (context: {
         } catch (emailError) {
           console.error('[stripe webhook] owner receipt email error', emailError);
         }
+      }
+        break;
+      }
+      case 'checkout.session.expired': {
+        const sessionId = (event.data.object as { id?: string | null })?.id ?? null;
+        console.log('[stripe webhook] checkout.session.expired', { eventId: event.id, sessionId });
+        return ok();
+      }
+      case 'payment_intent.succeeded': {
+        const paymentIntentId = (event.data.object as { id?: string | null })?.id ?? null;
+        console.log('[stripe webhook] payment_intent.succeeded', { eventId: event.id, paymentIntentId });
+        return ok();
+      }
+      case 'payment_intent.payment_failed': {
+        const paymentIntentId = (event.data.object as { id?: string | null })?.id ?? null;
+        console.log('[stripe webhook] payment_intent.payment_failed', { eventId: event.id, paymentIntentId });
+        return ok();
+      }
+      default: {
+        console.log('[stripe webhook] ignored event type', { eventType: event.type, eventId: event.id });
+        return ok();
       }
     }
 

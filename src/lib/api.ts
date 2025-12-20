@@ -135,3 +135,30 @@ export async function adminDeleteCategory(id: string): Promise<void> {
   });
   if (!response.ok) throw new Error(`Delete category failed: ${response.status}`);
 }
+
+export async function adminUploadImage(file: File): Promise<{ id: string; url: string }> {
+  const form = new FormData();
+  form.append('file', file, file.name || 'upload');
+
+  const response = await fetch('/api/admin/images/upload', {
+    method: 'POST',
+    body: form,
+  });
+
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const data = await response.json();
+      detail = data?.detail || data?.error || '';
+    } catch {
+      detail = '';
+    }
+    throw new Error(`Image upload failed (${response.status})${detail ? `: ${detail}` : ''}`);
+  }
+
+  const data = await response.json();
+  if (!data?.id || !data?.url) {
+    throw new Error('Image upload failed: invalid response');
+  }
+  return { id: data.id, url: data.url };
+}
