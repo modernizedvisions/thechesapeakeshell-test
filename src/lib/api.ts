@@ -140,10 +140,12 @@ export async function adminUploadImage(file: File): Promise<{ id: string; url: s
   const form = new FormData();
   form.append('file', file, file.name || 'upload');
 
-  const url = '/api/admin/images/upload';
+  const rid = crypto.randomUUID();
+  const url = `/api/admin/images/upload?rid=${encodeURIComponent(rid)}`;
   const method = 'POST';
 
   console.debug('[admin image upload] request', {
+    rid,
     url,
     method,
     bodyIsFormData: form instanceof FormData,
@@ -153,11 +155,13 @@ export async function adminUploadImage(file: File): Promise<{ id: string; url: s
 
   const response = await fetch(url, {
     method,
+    headers: { 'X-Upload-Request-Id': rid },
     body: form,
   });
 
   const responseText = await response.clone().text();
   console.debug('[admin image upload] response', {
+    rid,
     status: response.status,
     body: responseText,
   });

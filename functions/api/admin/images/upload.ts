@@ -4,6 +4,7 @@ type Env = {
   CLOUDFLARE_IMAGES_VARIANT?: string;
 };
 
+const BUILD_FINGERPRINT = 'upload-fingerprint-2025-12-21-a';
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -19,6 +20,11 @@ const json = (data: unknown, status = 200, headers: Record<string, string> = {})
     headers: { 'content-type': 'application/json', ...headers },
   });
 
+const withFingerprint = <T extends Record<string, unknown>>(data: T) => ({
+  ...data,
+  fingerprint: BUILD_FINGERPRINT,
+});
+
 const getProcessEnv = (key: string): string | undefined => {
   try {
     const proc = (globalThis as any)?.process;
@@ -32,12 +38,16 @@ const getProcessEnv = (key: string): string | undefined => {
 };
 
 const resolveImagesEnv = (env: Env) => {
-  const accountId = env.CLOUDFLARE_ACCOUNT_ID || getProcessEnv('CLOUDFLARE_ACCOUNT_ID');
-  const apiToken = env.CLOUDFLARE_IMAGES_API_TOKEN || getProcessEnv('CLOUDFLARE_IMAGES_API_TOKEN');
-  const variant =
-    env.CLOUDFLARE_IMAGES_VARIANT ||
-    getProcessEnv('CLOUDFLARE_IMAGES_VARIANT') ||
-    undefined;
+  const hasContextEnv = Boolean(
+    env.CLOUDFLARE_ACCOUNT_ID || env.CLOUDFLARE_IMAGES_API_TOKEN || env.CLOUDFLARE_IMAGES_VARIANT
+  );
+  const accountId = hasContextEnv
+    ? env.CLOUDFLARE_ACCOUNT_ID
+    : getProcessEnv('CLOUDFLARE_ACCOUNT_ID');
+  const apiToken = hasContextEnv
+    ? env.CLOUDFLARE_IMAGES_API_TOKEN
+    : getProcessEnv('CLOUDFLARE_IMAGES_API_TOKEN');
+  const variant = hasContextEnv ? env.CLOUDFLARE_IMAGES_VARIANT : getProcessEnv('CLOUDFLARE_IMAGES_VARIANT');
 
   const missing: string[] = [];
   if (!accountId) missing.push('CLOUDFLARE_ACCOUNT_ID');
@@ -46,14 +56,41 @@ const resolveImagesEnv = (env: Env) => {
 };
 
 export async function onRequestOptions(context: { request: Request }): Promise<Response> {
+  const { request } = context;
+  console.log('[images/upload] handler', {
+    handler: 'OPTIONS',
+    method: request.method,
+    url: request.url,
+    contentType: request.headers.get('content-type') || '',
+    requestId: request.headers.get('x-upload-request-id'),
+  });
   return new Response(null, {
     status: 204,
-    headers: corsHeaders(context.request),
+    headers: {
+      ...corsHeaders(context.request),
+      'X-Upload-Fingerprint': BUILD_FINGERPRINT,
+    },
   });
 }
 
 export async function onRequestGet(context: { request: Request }): Promise<Response> {
-  return json({ error: 'Method not allowed. Use POST.' }, 405, corsHeaders(context.request));
+  const { request } = context;
+  console.log('[images/upload] handler', {
+    handler: 'GET',
+    method: request.method,
+    url: request.url,
+    contentType: request.headers.get('content-type') || '',
+    requestId: request.headers.get('x-upload-request-id'),
+  });
+  return json(
+    withFingerprint({
+      error: 'Method not allowed. Use POST.',
+      method: 'GET',
+      path: request.url,
+    }),
+    405,
+    corsHeaders(request)
+  );
 }
 
 export async function onRequestPost(context: { request: Request; env: Env }): Promise<Response> {
@@ -61,38 +98,51 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
   const contentType = request.headers.get('content-type') || '';
   const contentLength = request.headers.get('content-length') || '';
 
-  console.log('[images/upload] incoming request', {
+  console.log('[images/upload] handler', {
+    handler: 'POST',
     method: request.method,
+    url: request.url,
     contentType,
-    contentLength,
-    provider: 'cloudflare_images',
+    requestId: request.headers.get('x-upload-request-id'),
   });
 
   try {
     const { accountId, apiToken, variant, missing } = resolveImagesEnv(env);
     if (missing.length) {
       return json(
-        {
+        withFingerprint({
           error: 'Missing Cloudflare Images configuration',
           details: missing,
           envPresent: {
-            accountId: !!accountId,
-            apiToken: !!apiToken,
-            variant: !!variant,
+            CLOUDFLARE_ACCOUNT_ID: !!accountId,
+            CLOUDFLARE_IMAGES_API_TOKEN: !!apiToken,
+            CLOUDFLARE_IMAGES_VARIANT: !!variant,
           },
-        },
+          envPreview: {
+            accountIdPrefix: accountId ? accountId.slice(0, 6) : null,
+            tokenPrefix: apiToken ? apiToken.slice(0, 6) : null,
+          },
+        }),
         500,
         corsHeaders(request)
       );
     }
 
     if (!contentType.toLowerCase().includes('multipart/form-data')) {
-      return json({ error: 'Expected multipart/form-data upload' }, 400, corsHeaders(request));
+      return json(
+        withFingerprint({ error: 'Expected multipart/form-data upload' }),
+        400,
+        corsHeaders(request)
+      );
     }
 
     const lengthValue = Number(contentLength);
     if (Number.isFinite(lengthValue) && lengthValue > MAX_UPLOAD_BYTES) {
-      return json({ error: 'Upload too large', details: 'Max 8MB allowed' }, 413, corsHeaders(request));
+      return json(
+        withFingerprint({ error: 'Upload too large', details: 'Max 8MB allowed' }),
+        413,
+        corsHeaders(request)
+      );
     }
 
     let form: FormData;
@@ -100,7 +150,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
       form = await request.formData();
     } catch (err) {
       console.error('[images/upload] Failed to parse form data', err);
-      return json({ error: 'Invalid form data' }, 400, corsHeaders(request));
+      return json(withFingerprint({ error: 'Invalid form data' }), 400, corsHeaders(request));
     }
 
     let file = form.get('file');
@@ -110,19 +160,23 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
     }
 
     if (!file || !(file instanceof File)) {
-      return json({ error: 'Missing file field' }, 400, corsHeaders(request));
+      return json(withFingerprint({ error: 'Missing file field' }), 400, corsHeaders(request));
     }
 
     if (!ALLOWED_MIME_TYPES.has(file.type)) {
       return json(
-        { error: 'Unsupported image type', details: file.type || 'unknown' },
+        withFingerprint({ error: 'Unsupported image type', details: file.type || 'unknown' }),
         415,
         corsHeaders(request)
       );
     }
 
     if (file.size > MAX_UPLOAD_BYTES) {
-      return json({ error: 'Upload too large', details: 'Max 8MB allowed' }, 413, corsHeaders(request));
+      return json(
+        withFingerprint({ error: 'Upload too large', details: 'Max 8MB allowed' }),
+        413,
+        corsHeaders(request)
+      );
     }
 
     console.log('[images/upload] file received', {
@@ -148,7 +202,11 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
       );
     } catch (err) {
       console.error('[images/upload] Upload request failed', err);
-      return json({ error: 'Image upload failed', details: 'Network error' }, 500, corsHeaders(request));
+      return json(
+        withFingerprint({ error: 'Image upload failed', details: 'Network error' }),
+        500,
+        corsHeaders(request)
+      );
     }
 
     const raw = await response.text();
@@ -167,14 +225,14 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
         raw ||
         `Cloudflare Images error (${response.status})`;
       return json(
-        {
+        withFingerprint({
           error: 'Image upload failed',
           details: {
             status: response.status,
             body: raw,
             message: details,
           },
-        },
+        }),
         500,
         corsHeaders(request)
       );
@@ -196,25 +254,25 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
     if (!result.id || !url) {
       console.error('[images/upload] Missing delivery URL', { result });
       return json(
-        { error: 'Image upload succeeded but no delivery URL returned', details: raw },
+        withFingerprint({ error: 'Image upload succeeded but no delivery URL returned', details: raw }),
         500,
         corsHeaders(request)
       );
     }
 
     return json(
-      {
+      withFingerprint({
         id: result.id,
         url,
         width: typeof result.width === 'number' ? result.width : undefined,
         height: typeof result.height === 'number' ? result.height : undefined,
-      },
+      }),
       200,
       corsHeaders(request)
     );
   } catch (err) {
     const details = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err);
     console.error('[images/upload] Unexpected error', details);
-    return json({ error: 'Image upload failed', details }, 500, corsHeaders(request));
+    return json(withFingerprint({ error: 'Image upload failed', details }), 500, corsHeaders(request));
   }
 }
