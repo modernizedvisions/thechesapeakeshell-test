@@ -184,3 +184,15 @@ export async function adminUploadImage(file: File): Promise<{ id: string; url: s
   }
   return { id: data.id, url: data.url };
 }
+
+export async function adminDeleteMessage(id: string): Promise<void> {
+  const response = await fetch(`/api/admin/messages/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Accept: 'application/json' },
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    const trimmed = text.length > 500 ? `${text.slice(0, 500)}...` : text;
+    throw new Error(trimmed || `Delete message failed (${response.status})`);
+  }
+}

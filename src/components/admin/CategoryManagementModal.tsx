@@ -101,7 +101,14 @@ export function CategoryManagementModal({
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="relative max-w-lg">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200"
+        >
+          CLOSE
+        </button>
         <DialogHeader className="space-y-1">
           <DialogTitle className="text-center text-lg font-semibold tracking-[0.15em] uppercase text-slate-900">
             Category Management

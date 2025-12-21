@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Copy, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { adminDeleteMessage } from '../../lib/api';
 import { AdminSectionHeader } from './AdminSectionHeader';
 
 interface AdminMessage {
@@ -29,6 +31,8 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
   const [error, setError] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<AdminMessage | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const truncateMessage = (text: string, max = 15): string => {
     if (!text) return '';
@@ -86,10 +90,28 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
 
   const handleDeleteMessage = () => {
     if (!selectedMessage) return;
-    setMessages((prev) => prev.filter((m) => m.id !== selectedMessage.id));
-    setSelectedMessage(null);
-    setIsDialogOpen(false);
-    toast.success('Message deleted from dashboard');
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteMessage = async () => {
+    if (!selectedMessage) return;
+    const id = selectedMessage.id;
+    console.debug('[messages] delete clicked', { id, hasHandler: !!adminDeleteMessage });
+    console.debug('[messages] calling delete endpoint', { url: `/api/admin/messages/${id}`, method: 'DELETE' });
+    setIsDeleting(true);
+    try {
+      await adminDeleteMessage(id);
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+      setSelectedMessage(null);
+      setIsDialogOpen(false);
+      setIsDeleteConfirmOpen(false);
+      toast.success('Message deleted from dashboard');
+    } catch (err) {
+      console.error('[AdminMessagesTab] Failed to delete message', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to delete message');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -232,6 +254,20 @@ export const AdminMessagesTab: React.FC<AdminMessagesTabProps> = ({ onCreateCust
           </div>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog
+        open={isDeleteConfirmOpen}
+        title="Are you sure?"
+        description="This will permanently delete this message."
+        confirmText={isDeleting ? 'Deleting...' : 'Confirm'}
+        cancelText="Cancel"
+        confirmVariant="danger"
+        confirmDisabled={isDeleting}
+        cancelDisabled={isDeleting}
+        onCancel={() => {
+          if (!isDeleting) setIsDeleteConfirmOpen(false);
+        }}
+        onConfirm={confirmDeleteMessage}
+      />
     </div>
   );
 };
