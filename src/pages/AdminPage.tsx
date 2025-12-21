@@ -375,17 +375,27 @@ export function AdminPage() {
       });
       throw err;
     } finally {
+      setImages((prev) =>
+        prev.map((img) =>
+          img.id === id && img.uploading
+            ? {
+                ...img,
+                uploading: false,
+              }
+            : img
+        )
+      );
       console.debug('[shop images] upload finally', { id, name: file.name });
     }
   };
 
   const addImages = async (
-    files: FileList | null,
+    files: File[],
     setImages: React.Dispatch<React.SetStateAction<ManagedImage[]>>,
     slotIndex?: number
   ) => {
-    if (!files) return;
-    const incoming = Array.from(files);
+    if (!files.length) return;
+    const incoming = [...files];
     const uploads: Array<{ id: string; file: File; previewUrl: string }> = [];
 
     console.debug('[shop images] batch start', { count: incoming.length, slotIndex });
@@ -487,8 +497,33 @@ export function AdminPage() {
 
       let uploadingCountAfter = 0;
       setImages((prev) => {
-        uploadingCountAfter = prev.filter((img) => img.uploading).length;
-        return prev;
+        const next = prev.map((img) => {
+          if (!img.uploading) return img;
+          const hasFinalUrl =
+            !!img.url && !img.url.startsWith('blob:') && !img.url.startsWith('data:');
+          const hasError = !!img.uploadError;
+          if (!hasFinalUrl && !hasError) {
+            return {
+              ...img,
+              uploading: false,
+              uploadError: 'Upload did not complete. Please retry or remove.',
+            };
+          }
+          return { ...img, uploading: false };
+        });
+        uploadingCountAfter = next.filter((img) => img.uploading).length;
+        console.log(
+          '[shop images] post-reconcile',
+          next.map((img) => ({
+            id: img.id,
+            uploading: img.uploading,
+            hasFile: !!img.file,
+            hasUrl: !!img.url,
+            hasError: !!img.uploadError,
+            urlPrefix: img.url?.slice(0, 40),
+          }))
+        );
+        return next;
       });
       console.debug('[shop images] batch done', { attempted, succeeded, failed, uploadingCountAfter });
     };
@@ -586,7 +621,9 @@ export function AdminPage() {
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const uploadingCount = productImages.filter((img) => img.uploading).length;
-    const missingUrlCount = productImages.filter((img) => img.file && !img.cloudflareId).length;
+    const missingUrlCount = productImages.filter(
+      (img) => !img.uploading && !img.uploadError && !!img.previewUrl && !img.url
+    ).length;
     const failedCount = productImages.filter((img) => img.uploadError).length;
     console.debug('[shop save] clicked', {
       mode: 'new',

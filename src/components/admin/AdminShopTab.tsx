@@ -148,10 +148,10 @@ export interface AdminShopTabProps {
   onCreateProduct: (e: React.FormEvent) => void | Promise<void>;
   onProductFormChange: (field: keyof ProductFormState, value: string | number | boolean) => void;
   onResetProductForm: () => void;
-  onAddProductImages: (files: FileList | null, slotIndex?: number) => void;
+  onAddProductImages: (files: File[], slotIndex?: number) => void;
   onSetPrimaryProductImage: (id: string) => void;
   onRemoveProductImage: (id: string) => void;
-  onAddEditProductImages: (files: FileList | null, slotIndex?: number) => void;
+  onAddEditProductImages: (files: File[], slotIndex?: number) => void;
   onSetPrimaryEditImage: (id: string) => void;
   onMoveEditImage: (id: string, direction: 'up' | 'down') => void;
   onRemoveEditImage: (id: string) => void;
@@ -200,7 +200,9 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const maxModalImages = 4;
   const isUploading = productImages.some((img) => img.uploading);
-  const missingUrlCount = productImages.filter((img) => img.file && !img.cloudflareId).length;
+  const missingUrlCount = productImages.filter(
+    (img) => !img.uploading && !img.uploadError && !!img.previewUrl && !img.url
+  ).length;
   const failedCount = productImages.filter((img) => img.uploadError).length;
 
   useEffect(() => {
@@ -274,7 +276,8 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
   }, [categories, editProductForm, onEditFormChange, onProductFormChange, productForm.category, selectedCategory]);
 
   const handleModalFileSelect = (files: FileList | null) => {
-    onAddEditProductImages(files);
+    const list = Array.from(files ?? []);
+    onAddEditProductImages(list);
   };
 
   const handleSetPrimaryModalImage = (id: string) => {
@@ -405,7 +408,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                   <div className="flex gap-3 pt-2 md:mt-auto">
                     <button
                       type="submit"
-                      disabled={productSaveState === 'saving' || isUploading}
+                      disabled={productSaveState === 'saving' || isUploading || failedCount > 0 || missingUrlCount > 0}
                       className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50"
                     >
                       {productSaveState === 'saving' ? (
@@ -417,6 +420,13 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                         'Save Product'
                       )}
                     </button>
+                    {(isUploading || failedCount > 0 || missingUrlCount > 0) && (
+                      <span className="text-xs text-slate-500 self-center">
+                        {isUploading && 'Uploading images...'}
+                        {!isUploading && failedCount > 0 && 'Fix failed uploads (remove/retry) before saving.'}
+                        {!isUploading && failedCount === 0 && missingUrlCount > 0 && 'Some images didn’t finish uploading. Retry or remove.'}
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={onResetProductForm}
@@ -502,7 +512,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                       if (e?.target) e.target.value = '';
                       return;
                     }
-                    onAddProductImages(fileList, activeProductSlot ?? undefined);
+                    onAddProductImages(files, activeProductSlot ?? undefined);
                     setActiveProductSlot(null);
                     if (e?.target) e.target.value = '';
                   }}
@@ -517,11 +527,21 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                       <div
                         key={image.id}
                         className="relative aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-100 cursor-pointer"
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          onAddProductImages(e.dataTransfer.files, index);
-                        }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const fileList = e.dataTransfer?.files;
+                        const files = Array.from(fileList ?? []);
+                        console.debug(
+                          '[shop images] drop files extracted',
+                          files.map((f) => ({ name: f.name, size: f.size, type: f.type }))
+                        );
+                        if (files.length === 0) {
+                          console.warn('[shop images] no files found; aborting upload');
+                          return;
+                        }
+                        onAddProductImages(files, index);
+                      }}
                         onClick={() => {
                           setActiveProductSlot(index);
                           productImageFileInputRef.current?.click();
@@ -564,7 +584,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                           console.warn('[shop images] no files found; aborting upload');
                           return;
                         }
-                        onAddProductImages(fileList, index);
+                        onAddProductImages(files, index);
                       }}
                       onClick={() => {
                         setActiveProductSlot(index);
