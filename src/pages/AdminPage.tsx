@@ -314,6 +314,12 @@ export function AdminPage() {
     previewUrl: string,
     setImages: React.Dispatch<React.SetStateAction<ManagedImage[]>>
   ) => {
+    console.debug('[shop images] upload start', {
+      id,
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    });
     setImages((prev) =>
       prev.map((img) =>
         img.id === id
@@ -343,6 +349,11 @@ export function AdminPage() {
             : img
         )
       );
+      console.debug('[shop images] upload success', {
+        id,
+        name: file.name,
+        url: result.url,
+      });
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Upload failed';
@@ -357,7 +368,14 @@ export function AdminPage() {
             : img
         )
       );
+      console.debug('[shop images] upload failure', {
+        id,
+        name: file.name,
+        error: err instanceof Error ? err.message : String(err),
+      });
       throw err;
+    } finally {
+      console.debug('[shop images] upload finally', { id, name: file.name });
     }
   };
 
@@ -426,6 +444,12 @@ export function AdminPage() {
       }
 
       return result;
+    });
+
+    console.debug('[shop images] batch slots', {
+      count: uploads.length,
+      ids: uploads.map((u) => u.id),
+      names: uploads.map((u) => u.file.name),
     });
 
     const runUploads = async () => {

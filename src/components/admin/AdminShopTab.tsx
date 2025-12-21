@@ -200,6 +200,18 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const maxModalImages = 4;
   const isUploading = productImages.some((img) => img.uploading);
+  const missingUrlCount = productImages.filter((img) => img.file && !img.cloudflareId).length;
+  const failedCount = productImages.filter((img) => img.uploadError).length;
+
+  useEffect(() => {
+    console.debug('[shop save] disable check', {
+      isUploading,
+      uploadingCount: productImages.filter((img) => img.uploading).length,
+      missingUrlCount,
+      failedCount,
+      imageCount: productImages.length,
+    });
+  }, [failedCount, isUploading, missingUrlCount, productImages]);
 
   const normalizeCategory = (value: string | undefined | null) => (value || '').trim().toLowerCase();
   const getProductCategories = (product: Product): string[] => {
