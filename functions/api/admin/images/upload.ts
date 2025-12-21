@@ -7,10 +7,16 @@ type Env = {
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-const json = (data: unknown, status = 200) =>
+const corsHeaders = (request?: Request | null) => ({
+  'Access-Control-Allow-Origin': request?.headers.get('Origin') || '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+});
+
+const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
   });
 
 const getProcessEnv = (key: string): string | undefined => {
@@ -39,8 +45,15 @@ const resolveImagesEnv = (env: Env) => {
   return { accountId, apiToken, variant, missing };
 };
 
-export async function onRequestGet(): Promise<Response> {
-  return json({ error: 'Method not allowed. Use POST.' }, 405);
+export async function onRequestOptions(context: { request: Request }): Promise<Response> {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(context.request),
+  });
+}
+
+export async function onRequestGet(context: { request: Request }): Promise<Response> {
+  return json({ error: 'Method not allowed. Use POST.' }, 405, corsHeaders(context.request));
 }
 
 export async function onRequestPost(context: { request: Request; env: Env }): Promise<Response> {
@@ -58,16 +71,28 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
   try {
     const { accountId, apiToken, variant, missing } = resolveImagesEnv(env);
     if (missing.length) {
-      return json({ error: 'Missing Cloudflare Images configuration', details: missing }, 500);
+      return json(
+        {
+          error: 'Missing Cloudflare Images configuration',
+          details: missing,
+          envPresent: {
+            accountId: !!accountId,
+            apiToken: !!apiToken,
+            variant: !!variant,
+          },
+        },
+        500,
+        corsHeaders(request)
+      );
     }
 
     if (!contentType.toLowerCase().includes('multipart/form-data')) {
-      return json({ error: 'Expected multipart/form-data upload' }, 400);
+      return json({ error: 'Expected multipart/form-data upload' }, 400, corsHeaders(request));
     }
 
     const lengthValue = Number(contentLength);
     if (Number.isFinite(lengthValue) && lengthValue > MAX_UPLOAD_BYTES) {
-      return json({ error: 'Upload too large', details: 'Max 8MB allowed' }, 413);
+      return json({ error: 'Upload too large', details: 'Max 8MB allowed' }, 413, corsHeaders(request));
     }
 
     let form: FormData;
@@ -75,7 +100,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
       form = await request.formData();
     } catch (err) {
       console.error('[images/upload] Failed to parse form data', err);
-      return json({ error: 'Invalid form data' }, 400);
+      return json({ error: 'Invalid form data' }, 400, corsHeaders(request));
     }
 
     let file = form.get('file');
@@ -85,15 +110,19 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
     }
 
     if (!file || !(file instanceof File)) {
-      return json({ error: 'Missing file field' }, 400);
+      return json({ error: 'Missing file field' }, 400, corsHeaders(request));
     }
 
     if (!ALLOWED_MIME_TYPES.has(file.type)) {
-      return json({ error: 'Unsupported image type', details: file.type || 'unknown' }, 415);
+      return json(
+        { error: 'Unsupported image type', details: file.type || 'unknown' },
+        415,
+        corsHeaders(request)
+      );
     }
 
     if (file.size > MAX_UPLOAD_BYTES) {
-      return json({ error: 'Upload too large', details: 'Max 8MB allowed' }, 413);
+      return json({ error: 'Upload too large', details: 'Max 8MB allowed' }, 413, corsHeaders(request));
     }
 
     console.log('[images/upload] file received', {
@@ -119,7 +148,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
       );
     } catch (err) {
       console.error('[images/upload] Upload request failed', err);
-      return json({ error: 'Image upload failed', details: 'Network error' }, 500);
+      return json({ error: 'Image upload failed', details: 'Network error' }, 500, corsHeaders(request));
     }
 
     const raw = await response.text();
@@ -137,7 +166,18 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
         payload?.message ||
         raw ||
         `Cloudflare Images error (${response.status})`;
-      return json({ error: 'Image upload failed', details }, 500);
+      return json(
+        {
+          error: 'Image upload failed',
+          details: {
+            status: response.status,
+            body: raw,
+            message: details,
+          },
+        },
+        500,
+        corsHeaders(request)
+      );
     }
 
     const result = payload.result || {};
@@ -155,18 +195,26 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
 
     if (!result.id || !url) {
       console.error('[images/upload] Missing delivery URL', { result });
-      return json({ error: 'Image upload succeeded but no delivery URL returned', details: raw }, 500);
+      return json(
+        { error: 'Image upload succeeded but no delivery URL returned', details: raw },
+        500,
+        corsHeaders(request)
+      );
     }
 
-    return json({
-      id: result.id,
-      url,
-      width: typeof result.width === 'number' ? result.width : undefined,
-      height: typeof result.height === 'number' ? result.height : undefined,
-    });
+    return json(
+      {
+        id: result.id,
+        url,
+        width: typeof result.width === 'number' ? result.width : undefined,
+        height: typeof result.height === 'number' ? result.height : undefined,
+      },
+      200,
+      corsHeaders(request)
+    );
   } catch (err) {
     const details = err instanceof Error ? `${err.message}\n${err.stack || ''}` : String(err);
     console.error('[images/upload] Unexpected error', details);
-    return json({ error: 'Image upload failed', details }, 500);
+    return json({ error: 'Image upload failed', details }, 500, corsHeaders(request));
   }
 }

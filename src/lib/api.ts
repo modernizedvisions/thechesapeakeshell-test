@@ -140,9 +140,26 @@ export async function adminUploadImage(file: File): Promise<{ id: string; url: s
   const form = new FormData();
   form.append('file', file, file.name || 'upload');
 
-  const response = await fetch('/api/admin/images/upload', {
-    method: 'POST',
+  const url = '/api/admin/images/upload';
+  const method = 'POST';
+
+  console.debug('[admin image upload] request', {
+    url,
+    method,
+    bodyIsFormData: form instanceof FormData,
+    fileCount: 1,
+    fileSizes: [file.size],
+  });
+
+  const response = await fetch(url, {
+    method,
     body: form,
+  });
+
+  const responseText = await response.clone().text();
+  console.debug('[admin image upload] response', {
+    status: response.status,
+    body: responseText,
   });
 
   if (!response.ok) {
