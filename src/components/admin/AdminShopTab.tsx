@@ -832,6 +832,7 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
+                  {console.debug('[edit modal] render images', editImages)}
                   {Array.from({ length: maxModalImages }).map((_, idx) => {
                     const image = editImages[idx];
                     if (image) {

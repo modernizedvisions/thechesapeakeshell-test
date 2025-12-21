@@ -599,6 +599,12 @@ export function AdminPage() {
   const hasUploadErrors = (images: ManagedImage[]) => images.some((img) => img.uploadError);
 
   const startEditProduct = (product: Product) => {
+    console.debug('[edit modal] open', {
+      productId: product?.id,
+      image_url: (product as any)?.image_url ?? (product as any)?.imageUrl,
+      image_urls_json: (product as any)?.image_urls_json ?? (product as any)?.imageUrlsJson,
+      imageUrls: (product as any)?.imageUrls,
+    });
     setEditProductId(product.id);
     setEditProductForm(productToFormState(product));
     const urls = product.imageUrls && product.imageUrls.length > 0 ? product.imageUrls : (product.imageUrl ? [product.imageUrl] : []);
@@ -607,8 +613,9 @@ export function AdminPage() {
       url,
       isPrimary: idx === 0,
       isNew: false,
-      needsMigration: isBase64ImageUrl(url),
+      needsMigration: isBlockedImageUrl(url),
     }));
+    console.debug('[edit modal] images hydrated', managed);
     setEditProductImages(managed);
   };
 
