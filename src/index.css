@@ -4,6 +4,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Force square UI across the site */
+.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-3xl,
+.rounded-full,
+.rounded-t, .rounded-t-sm, .rounded-t-md, .rounded-t-lg, .rounded-t-xl, .rounded-t-2xl, .rounded-t-3xl,
+.rounded-b, .rounded-b-sm, .rounded-b-md, .rounded-b-lg, .rounded-b-xl, .rounded-b-2xl, .rounded-b-3xl,
+.rounded-l, .rounded-l-sm, .rounded-l-md, .rounded-l-lg, .rounded-l-xl, .rounded-l-2xl, .rounded-l-3xl,
+.rounded-r, .rounded-r-sm, .rounded-r-md, .rounded-r-lg, .rounded-r-xl, .rounded-r-2xl, .rounded-r-3xl,
+.rounded-tl, .rounded-tr, .rounded-bl, .rounded-br,
+.rounded-tl-sm, .rounded-tr-sm, .rounded-bl-sm, .rounded-br-sm,
+.rounded-tl-md, .rounded-tr-md, .rounded-bl-md, .rounded-br-md,
+.rounded-tl-lg, .rounded-tr-lg, .rounded-bl-lg, .rounded-br-lg,
+.rounded-tl-xl, .rounded-tr-xl, .rounded-bl-xl, .rounded-br-xl,
+.rounded-tl-2xl, .rounded-tr-2xl, .rounded-bl-2xl, .rounded-br-2xl,
+.rounded-none {
+  border-radius: 0 !important;
+}
+
 @layer base {
   body {
     @apply font-sans text-gray-900 bg-white;
@@ -32,22 +49,6 @@
   .sold-grid.landscape\:grid-cols-4 {
     @media (orientation: landscape) and (max-width: 1023px) {
       grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    }
-  }
-  .gallery-dense {
-    grid-auto-flow: dense;
-  }
-  .gallery-grid {
-    grid-auto-rows: 120px;
-  }
-  @media (min-width: 768px) {
-    .gallery-grid {
-      grid-auto-rows: 110px;
-    }
-  }
-  @media (min-width: 1024px) {
-    .gallery-grid {
-      grid-auto-rows: 130px;
     }
   }
 }
