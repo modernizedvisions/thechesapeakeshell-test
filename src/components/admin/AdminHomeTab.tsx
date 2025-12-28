@@ -1,20 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle, Loader2, Plus } from 'lucide-react';
-import type { Category, CustomOrdersImage, HeroCollageImage } from '../../lib/types';
+import type { Category, CustomOrdersImage, HeroCollageImage, HomeSiteContent } from '../../lib/types';
 import { AdminSectionHeader } from './AdminSectionHeader';
-import { adminFetchCategories } from '../../lib/api';
+import { adminFetchCategories, adminUploadImageScoped, getAdminSiteContentHome, updateAdminSiteContentHome } from '../../lib/api';
 import { ShopCategoryCardsSection } from './ShopCategoryCardsSection';
-
-export interface AdminHomeTabProps {
-  heroImages: HeroCollageImage[];
-  customOrdersImages: CustomOrdersImage[];
-  onHeroChange: (images: HeroCollageImage[]) => void;
-  onCustomOrdersChange: (images: CustomOrdersImage[]) => void;
-  onSaveHeroConfig: () => Promise<void>;
-  homeSaveState: 'idle' | 'saving' | 'success';
-  heroRotationEnabled?: boolean;
-  onHeroRotationToggle?: (enabled: boolean) => void;
-}
 
 const OTHER_ITEMS_CATEGORY = {
   slug: 'other-items',
@@ -25,17 +14,14 @@ const isOtherItemsCategory = (category: Category) =>
   (category.slug || '').toLowerCase() === OTHER_ITEMS_CATEGORY.slug ||
   (category.name || '').trim().toLowerCase() === OTHER_ITEMS_CATEGORY.name.toLowerCase();
 
-export function AdminHomeTab({
-  heroImages,
-  customOrdersImages,
-  onHeroChange,
-  onCustomOrdersChange,
-  onSaveHeroConfig,
-  homeSaveState,
-  heroRotationEnabled = false,
-  onHeroRotationToggle,
-}: AdminHomeTabProps) {
+export function AdminHomeTab() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [heroImages, setHeroImages] = useState<HeroCollageImage[]>([]);
+  const [customOrdersImages, setCustomOrdersImages] = useState<CustomOrdersImage[]>([]);
+  const [heroRotationEnabled, setHeroRotationEnabled] = useState(false);
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [loadState, setLoadState] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -49,22 +35,65 @@ export function AdminHomeTab({
     loadCategories();
   }, []);
 
+  useEffect(() => {
+    const loadHomeContent = async () => {
+      setLoadState('loading');
+      setError(null);
+      try {
+        const content = await getAdminSiteContentHome();
+        const { hero, customOrders, rotation } = normalizeSiteContent(content);
+        setHeroImages(hero);
+        setCustomOrdersImages(customOrders);
+        setHeroRotationEnabled(rotation);
+        setLoadState('idle');
+      } catch (err) {
+        console.error('Failed to load home content', err);
+        setLoadState('error');
+        setError(err instanceof Error ? err.message : 'Failed to load home content');
+      }
+    };
+    loadHomeContent();
+  }, []);
+
+  const handleSave = async () => {
+    setSaveState('saving');
+    setError(null);
+    try {
+      const hasUploads = heroImages.some((img) => img?.uploading) || customOrdersImages.some((img) => img?.uploading);
+      const hasErrors = heroImages.some((img) => img?.uploadError) || customOrdersImages.some((img) => img?.uploadError);
+      const hasInvalid = [...heroImages, ...customOrdersImages].some(
+        (img) => img?.imageUrl?.startsWith('blob:') || img?.imageUrl?.startsWith('data:')
+      );
+      if (hasUploads) throw new Error('Images are still uploading.');
+      if (hasErrors) throw new Error('Fix failed uploads before saving.');
+      if (hasInvalid) throw new Error('Images must be uploaded first (no blob/data URLs).');
+      const payload = buildSiteContent(heroImages, customOrdersImages, heroRotationEnabled);
+      await updateAdminSiteContentHome(payload);
+      setSaveState('success');
+      setTimeout(() => setSaveState('idle'), 1500);
+    } catch (err) {
+      console.error('Failed to save home content', err);
+      setSaveState('error');
+      setError(err instanceof Error ? err.message : 'Failed to save home content');
+    }
+  };
+
   return (
     <div className="space-y-12">
       <HeroCollageAdmin
         images={heroImages}
-        onChange={onHeroChange}
-        onSave={onSaveHeroConfig}
-        saveState={homeSaveState}
+        onChange={setHeroImages}
+        onSave={handleSave}
+        saveState={saveState}
         heroRotationEnabled={heroRotationEnabled}
-        onHeroRotationToggle={onHeroRotationToggle}
+        onHeroRotationToggle={setHeroRotationEnabled}
       />
 
       <CustomOrdersImagesAdmin
         images={customOrdersImages}
-        onChange={onCustomOrdersChange}
-        onSave={onSaveHeroConfig}
-        saveState={homeSaveState}
+        onChange={setCustomOrdersImages}
+        onSave={handleSave}
+        saveState={saveState}
       />
 
       <ShopCategoryCardsSection
@@ -73,15 +102,21 @@ export function AdminHomeTab({
           setCategories((prev) => normalizeCategoriesList(prev.map((c) => (c.id === updated.id ? updated : c))));
         }}
       />
+      {(loadState === 'loading' || error) && (
+        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          {loadState === 'loading' && 'Loading home content...'}
+          {error && loadState !== 'loading' && error}
+        </div>
+      )}
     </div>
   );
 }
 
 interface HeroCollageAdminProps {
   images: HeroCollageImage[];
-  onChange: (images: HeroCollageImage[]) => void;
+  onChange: React.Dispatch<React.SetStateAction<HeroCollageImage[]>>;
   onSave: () => Promise<void>;
-  saveState: 'idle' | 'saving' | 'success';
+  saveState: 'idle' | 'saving' | 'success' | 'error';
   heroRotationEnabled?: boolean;
   onHeroRotationToggle?: (enabled: boolean) => void;
 }
@@ -96,26 +131,57 @@ function HeroCollageAdmin({
 }: HeroCollageAdminProps) {
   const slots = [0, 1, 2];
 
-  const handleFileSelect = (index: number, file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      onChange(
-        slots
-          .map((slotIndex) => {
-            if (slotIndex !== index) return images[slotIndex];
-            const existing = images[slotIndex];
-            return {
-              id: existing?.id || `hero-${slotIndex}-${crypto.randomUUID?.() || Date.now()}`,
-              imageUrl: dataUrl,
-              alt: existing?.alt,
-              createdAt: existing?.createdAt || new Date().toISOString(),
-            };
-          })
-          .filter((img): img is HeroCollageImage => Boolean(img && img.imageUrl))
-      );
-    };
-    reader.readAsDataURL(file);
+  const handleFileSelect = async (index: number, file: File) => {
+    const previewUrl = URL.createObjectURL(file);
+    onChange((prev) => {
+      const next = [...prev];
+      const existing = next[index];
+      next[index] = {
+        id: existing?.id || `hero-${index}-${crypto.randomUUID?.() || Date.now()}`,
+        imageUrl: previewUrl,
+        alt: existing?.alt,
+        createdAt: existing?.createdAt || new Date().toISOString(),
+        uploading: true,
+        uploadError: undefined,
+        previewUrl,
+      };
+      return next;
+    });
+
+    try {
+      const result = await adminUploadImageScoped(file, { scope: 'home' });
+      URL.revokeObjectURL(previewUrl);
+      onChange((prev) => {
+        const next = [...prev];
+        const existing = next[index];
+        if (existing) {
+          next[index] = {
+            ...existing,
+            imageUrl: result.url,
+            uploading: false,
+            uploadError: undefined,
+            previewUrl: undefined,
+          };
+        } else {
+          next[index] = { id: `hero-${index}`, imageUrl: result.url };
+        }
+        return next;
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      onChange((prev) => {
+        const next = [...prev];
+        const existing = next[index];
+        if (existing) {
+          next[index] = {
+            ...existing,
+            uploading: false,
+            uploadError: message,
+          };
+        }
+        return next;
+      });
+    }
   };
 
   const handleAltChange = (index: number, alt: string) => {
@@ -127,7 +193,12 @@ function HeroCollageAdmin({
   };
 
   const handleRemove = (index: number) => {
-    onChange(images.filter((_, i) => i !== index));
+    onChange((prev) => {
+      const next = [...prev];
+      const existing = next[index];
+      next[index] = existing ? { ...existing, imageUrl: '' } : { id: `hero-${index}`, imageUrl: '' };
+      return next;
+    });
   };
 
   return (
@@ -212,7 +283,14 @@ function HeroCollageAdmin({
 
               <div className="aspect-[3/4] rounded-md border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
                 {image?.imageUrl ? (
-                  <img src={image.imageUrl} alt={image.alt || `Hero image ${slot + 1}`} className="h-full w-full object-cover" />
+                  <>
+                    <img src={image.previewUrl || image.imageUrl} alt={image.alt || `Hero image ${slot + 1}`} className="h-full w-full object-cover" />
+                    {image.uploading && (
+                      <div className="absolute inset-0 bg-white/70 flex items-center justify-center text-xs text-slate-700">
+                        Uploading...
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="flex flex-col items-center text-slate-500 text-sm">
                     <Plus className="h-6 w-6 mb-1" />
@@ -220,6 +298,9 @@ function HeroCollageAdmin({
                   </div>
                 )}
               </div>
+              {image?.uploadError && (
+                <div className="text-xs text-red-600">{image.uploadError}</div>
+              )}
 
               <div className="space-y-1">
                 <label htmlFor={`${inputId}-alt`} className="text-xs font-medium text-slate-700">
@@ -256,9 +337,9 @@ function HeroCollageAdmin({
 
 interface CustomOrdersImagesAdminProps {
   images: CustomOrdersImage[];
-  onChange: (images: CustomOrdersImage[]) => void;
+  onChange: React.Dispatch<React.SetStateAction<CustomOrdersImage[]>>;
   onSave: () => Promise<void>;
-  saveState: 'idle' | 'saving' | 'success';
+  saveState: 'idle' | 'saving' | 'success' | 'error';
 }
 
 const normalizeCategoriesList = (items: Category[]): Category[] => {
@@ -278,21 +359,48 @@ const normalizeCategoriesList = (items: Category[]): Category[] => {
 function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: CustomOrdersImagesAdminProps) {
   const slots = [0, 1, 2, 3];
 
-  const handleFileSelect = (index: number, file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const next = [...images];
-      next[index] = { ...(next[index] || {}), imageUrl: dataUrl };
-      onChange(next.slice(0, 4));
-    };
-    reader.readAsDataURL(file);
+  const handleFileSelect = async (index: number, file: File) => {
+    const previewUrl = URL.createObjectURL(file);
+    onChange((prev) => {
+      const next = [...prev];
+      next[index] = { ...(next[index] || { imageUrl: '' }), imageUrl: previewUrl, uploading: true, uploadError: undefined, previewUrl };
+      return next.slice(0, 4);
+    });
+
+    try {
+      const result = await adminUploadImageScoped(file, { scope: 'home' });
+      URL.revokeObjectURL(previewUrl);
+      onChange((prev) => {
+        const updated = [...prev];
+        updated[index] = {
+          ...(updated[index] || {}),
+          imageUrl: result.url,
+          uploading: false,
+          uploadError: undefined,
+          previewUrl: undefined,
+        };
+        return updated.slice(0, 4);
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      onChange((prev) => {
+        const updated = [...prev];
+        updated[index] = {
+          ...(updated[index] || {}),
+          uploading: false,
+          uploadError: message,
+        };
+        return updated.slice(0, 4);
+      });
+    }
   };
 
   const handleRemove = (index: number) => {
-    const next = [...images];
-    next.splice(index, 1);
-    onChange(next);
+    onChange((prev) => {
+      const next = [...prev];
+      next[index] = { ...(next[index] || { imageUrl: '' }), imageUrl: '' };
+      return next;
+    });
   };
 
   return (
@@ -360,7 +468,14 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
 
               <div className="aspect-[3/4] rounded-md border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden">
                 {image?.imageUrl ? (
-                  <img src={image.imageUrl} alt={image.alt || `Custom orders ${slot + 1}`} className="h-full w-full object-cover" />
+                  <>
+                    <img src={image.previewUrl || image.imageUrl} alt={image.alt || `Custom orders ${slot + 1}`} className="h-full w-full object-cover" />
+                    {image.uploading && (
+                      <div className="absolute inset-0 bg-white/70 flex items-center justify-center text-xs text-slate-700">
+                        Uploading...
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="flex flex-col items-center text-slate-500 text-sm">
                     <Plus className="h-6 w-6 mb-1" />
@@ -368,6 +483,9 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
                   </div>
                 )}
               </div>
+              {image?.uploadError && (
+                <div className="text-xs text-red-600">{image.uploadError}</div>
+              )}
 
               <input
                 id={inputId}
@@ -387,3 +505,40 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
     </section>
   );
 }
+
+const normalizeSiteContent = (content: HomeSiteContent) => {
+  const hero: HeroCollageImage[] = Array.from({ length: 3 }, (_, index) => ({
+    id: `hero-${index}`,
+    imageUrl: '',
+  }));
+  if (content.heroImages?.left) hero[0] = { id: 'hero-left', imageUrl: content.heroImages.left };
+  if (content.heroImages?.middle) hero[1] = { id: 'hero-middle', imageUrl: content.heroImages.middle };
+  if (content.heroImages?.right) hero[2] = { id: 'hero-right', imageUrl: content.heroImages.right };
+
+  const customOrders = Array.from({ length: 4 }, () => ({ imageUrl: '' }));
+  if (Array.isArray(content.customOrderImages)) {
+    content.customOrderImages.slice(0, 4).forEach((url, index) => {
+      customOrders[index] = { imageUrl: url };
+    });
+  }
+
+  return {
+    hero,
+    customOrders,
+    rotation: !!content.heroRotationEnabled,
+  };
+};
+
+const buildSiteContent = (
+  hero: HeroCollageImage[],
+  customOrders: CustomOrdersImage[],
+  heroRotationEnabled: boolean
+): HomeSiteContent => {
+  const heroImages = {
+    left: hero[0]?.imageUrl || '',
+    middle: hero[1]?.imageUrl || '',
+    right: hero[2]?.imageUrl || '',
+  };
+  const customOrderImages = customOrders.filter((img) => !!img?.imageUrl).slice(0, 4).map((img) => img.imageUrl);
+  return { heroImages, customOrderImages, heroRotationEnabled };
+};

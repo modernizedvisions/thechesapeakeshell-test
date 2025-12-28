@@ -28,6 +28,9 @@ export default function HomeHero({ heroImages = [], heroRotationEnabled = false 
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-900">
               PIECES OF THE COAST, BRUSHED WITH COLOR.
             </h1>
+            <p className="mt-3 max-w-lg text-base sm:text-lg text-slate-600">
+              Hand-painted shell art and coastal gifts — each piece is one-of-a-kind and made to brighten your home.
+            </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 to="/shop"

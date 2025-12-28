@@ -69,6 +69,10 @@ export interface GalleryImage {
   title?: string;
   position?: number;
   createdAt?: string;
+  uploading?: boolean;
+  uploadError?: string;
+  previewUrl?: string;
+  file?: File;
 }
 
 // Collage images for the homepage hero
@@ -77,11 +81,17 @@ export interface HeroCollageImage {
   imageUrl: string;
   alt?: string;
   createdAt?: string;
+  uploading?: boolean;
+  uploadError?: string;
+  previewUrl?: string;
 }
 
 export interface CustomOrdersImage {
   imageUrl: string;
   alt?: string;
+  uploading?: boolean;
+  uploadError?: string;
+  previewUrl?: string;
 }
 
 export interface HeroConfig {
@@ -89,6 +99,16 @@ export interface HeroConfig {
   customOrdersImages?: CustomOrdersImage[]; // up to 4 for custom shells grid
   heroRotationEnabled?: boolean;
 }
+
+export type HomeSiteContent = {
+  heroImages?: {
+    left?: string;
+    middle?: string;
+    right?: string;
+  };
+  customOrderImages?: string[];
+  heroRotationEnabled?: boolean;
+};
 
 export interface Category {
   id: string;

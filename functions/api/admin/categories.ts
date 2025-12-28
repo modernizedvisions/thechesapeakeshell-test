@@ -60,6 +60,8 @@ const REQUIRED_CATEGORY_COLUMNS: Record<string, string> = {
   hero_image_url: 'hero_image_url TEXT',
 };
 
+const isDataUrl = (value?: string | null) => typeof value === 'string' && value.trim().toLowerCase().startsWith('data:');
+
 export async function onRequest(context: { env: { DB: D1Database }; request: Request }): Promise<Response> {
   const method = context.request.method.toUpperCase();
 
@@ -107,6 +109,10 @@ async function handlePost(db: D1Database, request: Request): Promise<Response> {
   const imageUrl = body?.imageUrl || null;
   const heroImageUrl = body?.heroImageUrl || null;
 
+  if (isDataUrl(imageUrl) || isDataUrl(heroImageUrl)) {
+    return json({ error: 'image_url_invalid', detail: 'Image URLs must be normal URLs (data URLs are not allowed).' }, 400);
+  }
+
   const result = await db
     .prepare(`INSERT INTO categories (id, name, slug, image_url, hero_image_url, show_on_homepage) VALUES (?, ?, ?, ?, ?, ?);`)
     .bind(id, name, slug, imageUrl, heroImageUrl, showOnHomePage ? 1 : 0)
@@ -143,8 +149,18 @@ async function handlePut(db: D1Database, request: Request): Promise<Response> {
     const slugSource = body.slug || body.name;
     if (slugSource !== undefined) addSet('slug = ?', toSlug(slugSource));
   }
-  if (body.imageUrl !== undefined) addSet('image_url = ?', body.imageUrl || null);
-  if (body.heroImageUrl !== undefined) addSet('hero_image_url = ?', body.heroImageUrl || null);
+  if (body.imageUrl !== undefined) {
+    if (isDataUrl(body.imageUrl)) {
+      return json({ error: 'image_url_invalid', detail: 'Image URLs must be normal URLs (data URLs are not allowed).' }, 400);
+    }
+    addSet('image_url = ?', body.imageUrl || null);
+  }
+  if (body.heroImageUrl !== undefined) {
+    if (isDataUrl(body.heroImageUrl)) {
+      return json({ error: 'hero_image_url_invalid', detail: 'Image URLs must be normal URLs (data URLs are not allowed).' }, 400);
+    }
+    addSet('hero_image_url = ?', body.heroImageUrl || null);
+  }
   if (body.showOnHomePage !== undefined) addSet('show_on_homepage = ?', body.showOnHomePage ? 1 : 0);
 
   if (!sets.length) return json({ error: 'No fields to update' }, 400);

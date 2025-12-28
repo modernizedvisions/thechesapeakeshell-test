@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { fetchCategories, fetchHomeHeroConfig, fetchShopCategoryTiles } from '../lib/api';
-import { Category, CustomOrdersImage, HeroCollageImage, ShopCategoryTile } from '../lib/types';
+import { fetchCategories, fetchShopCategoryTiles, getPublicSiteContentHome } from '../lib/api';
+import { Category, CustomOrdersImage, HeroCollageImage, HomeSiteContent, ShopCategoryTile } from '../lib/types';
 import { ContactForm } from '../components/ContactForm';
 import { Link } from 'react-router-dom';
 import HomeHero from '../components/HomeHero';
@@ -133,10 +133,11 @@ export function HomePage() {
 
   const loadHeroImages = async () => {
     try {
-      const config = await fetchHomeHeroConfig();
-      setCustomOrderImages((config.customOrdersImages || []).slice(0, 4));
-      setHeroImages(config.heroImages || []);
-      setHeroRotationEnabled(!!config.heroRotationEnabled);
+      const content = await getPublicSiteContentHome();
+      const { hero, customOrders, rotation } = normalizeHomeContent(content);
+      setCustomOrderImages(customOrders);
+      setHeroImages(hero);
+      setHeroRotationEnabled(rotation);
     } catch (error) {
       console.error('Error loading hero images:', error);
     } finally {
@@ -468,4 +469,17 @@ export function HomePage() {
       <ContactForm />
     </div>
   );
+}
+
+function normalizeHomeContent(content: HomeSiteContent) {
+  const hero: HeroCollageImage[] = [];
+  if (content.heroImages?.left) hero[0] = { id: 'hero-left', imageUrl: content.heroImages.left };
+  if (content.heroImages?.middle) hero[1] = { id: 'hero-middle', imageUrl: content.heroImages.middle };
+  if (content.heroImages?.right) hero[2] = { id: 'hero-right', imageUrl: content.heroImages.right };
+
+  const customOrders = Array.isArray(content.customOrderImages)
+    ? content.customOrderImages.slice(0, 4).map((url) => ({ imageUrl: url }))
+    : [];
+
+  return { hero, customOrders, rotation: !!content.heroRotationEnabled };
 }

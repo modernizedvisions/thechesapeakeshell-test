@@ -172,6 +172,13 @@ CREATE TABLE IF NOT EXISTS gallery_images (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Site content (home hero + custom orders)
+CREATE TABLE IF NOT EXISTS site_content (
+  key TEXT PRIMARY KEY,
+  json TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_gallery_images_sort_order ON gallery_images(sort_order);
 CREATE INDEX IF NOT EXISTS idx_gallery_images_created_at ON gallery_images(created_at);
 
@@ -179,3 +186,6 @@ CREATE INDEX IF NOT EXISTS idx_gallery_images_created_at ON gallery_images(creat
 -- Other Items is enforced as non-deletable by API logic; schema has no dedicated flag.
 INSERT OR IGNORE INTO categories (id, name, slug, show_on_homepage)
 VALUES ('other-items', 'Other Items', 'other-items', 1);
+
+INSERT OR IGNORE INTO site_content (key, json)
+VALUES ('home', '{}');

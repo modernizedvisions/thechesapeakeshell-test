@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
-import { fetchShopCategoryTiles, saveShopCategoryTiles, adminUpdateCategory } from '../../lib/api';
+import { fetchShopCategoryTiles, saveShopCategoryTiles, adminUpdateCategory, adminUploadImageScoped } from '../../lib/api';
 import type { Category, ShopCategoryTile } from '../../lib/types';
 import { AdminSectionHeader } from './AdminSectionHeader';
 
@@ -71,34 +71,38 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
   };
 
   const handleTileImageSelect = (file: File, tileId: string) => {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      if (typeof reader.result !== 'string') return;
-      const tile = tiles.find((t) => t.id === tileId);
-      const resolvedCategory = tile ? resolveCategoryForTile(tile) : undefined;
-      const categoryId = resolvedCategory?.id;
-      if (!categoryId) {
-        alert('Please select a category before uploading an image.');
-        return;
-      }
-      const imageUrl = reader.result as string;
-      // Optimistically update local category hero image
-      setCategoryState((prev) =>
-        prev.map((cat) => (cat.id === categoryId ? { ...cat, heroImageUrl: imageUrl } : cat))
-      );
+    const tile = tiles.find((t) => t.id === tileId);
+    const resolvedCategory = tile ? resolveCategoryForTile(tile) : undefined;
+    const categoryId = resolvedCategory?.id;
+    if (!categoryId) {
+      alert('Please select a category before uploading an image.');
+      return;
+    }
+    const previewUrl = URL.createObjectURL(file);
+    const previous = resolvedCategory?.heroImageUrl || resolvedCategory?.imageUrl || '';
+    // Optimistically update local category hero image
+    setCategoryState((prev) =>
+      prev.map((cat) => (cat.id === categoryId ? { ...cat, heroImageUrl: previewUrl } : cat))
+    );
 
+    const runUpload = async () => {
       try {
-        const updated = await adminUpdateCategory(categoryId, { heroImageUrl: imageUrl });
+        const result = await adminUploadImageScoped(file, { scope: 'categories' });
+        URL.revokeObjectURL(previewUrl);
+        const updated = await adminUpdateCategory(categoryId, { heroImageUrl: result.url });
         if (updated) {
           setCategoryState((prev) => prev.map((cat) => (cat.id === updated.id ? { ...cat, ...updated } : cat)));
           onCategoryUpdated?.(updated);
         }
       } catch (err) {
         console.error('Failed to update category hero image', err);
+        setCategoryState((prev) =>
+          prev.map((cat) => (cat.id === categoryId ? { ...cat, heroImageUrl: previous } : cat))
+        );
         alert('Failed to save image. Please try again.');
       }
     };
-    reader.readAsDataURL(file);
+    void runUpload();
   };
 
   const handleSave = async () => {
@@ -214,20 +218,6 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
                   </select>
                 </div>
                 <div className="flex items-center gap-2">
-                  {categoryImage && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const cleared = { ...tile, imageUrl: '', categoryId: tile.categoryId };
-                        setTiles((prev) =>
-                          prev.map((t) => (t.id === tile.id ? cleared : t))
-                        );
-                      }}
-                      className="text-xs text-red-600 hover:text-red-700"
-                    >
-                      Remove
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -236,7 +226,7 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
                     }}
                     className="text-xs text-slate-700 underline hover:text-slate-900"
                   >
-                    {categoryImage ? 'Replace' : 'Upload'}
+                    Upload
                   </button>
                 </div>
               </div>

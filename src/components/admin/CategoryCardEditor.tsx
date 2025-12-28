@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import type { Category } from '../../lib/types';
 import { Loader2, Trash2 } from 'lucide-react';
+import { adminUploadImageScoped } from '../../lib/api';
 
 interface CategoryCardEditorProps {
   category: Category;
@@ -49,8 +50,8 @@ export function CategoryCardEditor({ category, onUpdate, onDelete, isBusy }: Cat
   const handleImageSelected = async (file: File) => {
     setIsUpdatingImage(true);
     try {
-      const dataUrl = await readFileAsDataUrl(file);
-      await onUpdate(category.id, { imageUrl: dataUrl });
+      const result = await adminUploadImageScoped(file, { scope: 'categories' });
+      await onUpdate(category.id, { imageUrl: result.url });
     } finally {
       setIsUpdatingImage(false);
     }
@@ -138,17 +139,6 @@ export function CategoryCardEditor({ category, onUpdate, onDelete, isBusy }: Cat
     </div>
   );
 }
-
-const readFileAsDataUrl = (file: File): Promise<string> =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error('Failed to read file'));
-    };
-    reader.onerror = () => reject(new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
 
 export function CategoryCardSkeleton() {
   return (

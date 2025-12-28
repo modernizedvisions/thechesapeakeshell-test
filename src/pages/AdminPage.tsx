@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchGalleryImages,
-  fetchHomeHeroConfig,
   fetchOrders,
   fetchSoldProducts,
   saveGalleryImages,
-  saveHomeHeroConfig,
   verifyAdminPassword,
   adminFetchProducts,
   adminCreateProduct,
@@ -13,7 +11,7 @@ import {
   adminDeleteProduct,
   adminUploadImage,
 } from '../lib/api';
-import { CustomOrdersImage, GalleryImage, HeroCollageImage, HeroConfig, Product } from '../lib/types';
+import { GalleryImage, Product } from '../lib/types';
 import type { AdminOrder } from '../lib/db/orders';
 import { AdminOrdersTab } from '../components/admin/AdminOrdersTab';
 import { AdminSoldTab } from '../components/admin/AdminSoldTab';
@@ -91,14 +89,8 @@ export function AdminPage() {
   const [adminProducts, setAdminProducts] = useState<Product[]>([]);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
-  const [heroConfig, setHeroConfig] = useState<HeroConfig>({
-    heroImages: [],
-    customOrdersImages: [],
-    heroRotationEnabled: false,
-  });
   const [activeTab, setActiveTab] = useState<'orders' | 'shop' | 'messages' | 'customOrders' | 'images' | 'sold'>('orders');
   const [gallerySaveState, setGallerySaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
-  const [homeSaveState, setHomeSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
   const [productSaveState, setProductSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [editProductSaveState, setEditProductSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [productStatus, setProductStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
@@ -138,23 +130,6 @@ export function AdminPage() {
       style: 'currency',
       currency: currency.toUpperCase(),
     }).format(amount);
-  };
-
-  const handleSaveHeroConfig = async () => {
-    setHomeSaveState('saving');
-    try {
-      const configToSave: HeroConfig = {
-        heroImages: (heroConfig.heroImages || []).slice(0, 3),
-        customOrdersImages: (heroConfig.customOrdersImages || []).slice(0, 4),
-        heroRotationEnabled: !!heroConfig.heroRotationEnabled,
-      };
-      await saveHomeHeroConfig(configToSave);
-      setHomeSaveState('success');
-      setTimeout(() => setHomeSaveState('idle'), 1500);
-    } catch (err) {
-      console.error('Failed to save home hero images', err);
-      setHomeSaveState('idle');
-    }
   };
 
   useEffect(() => {
@@ -214,7 +189,7 @@ export function AdminPage() {
 
     // Fetch other admin data in parallel; failures here should not hide orders.
     try {
-      const [soldData, galleryData, heroData] = await Promise.all([
+      const [soldData, galleryData] = await Promise.all([
         fetchSoldProducts().catch((err) => {
           console.error('Failed to load sold products', err);
           return [];
@@ -223,18 +198,9 @@ export function AdminPage() {
           console.error('Failed to load gallery images', err);
           return [];
         }),
-        fetchHomeHeroConfig().catch((err) => {
-          console.error('Failed to load home hero config', err);
-          return { heroImages: [], customOrdersImages: [] };
-        }),
       ]);
       setSoldProducts(soldData);
       setGalleryImages(galleryData);
-      setHeroConfig({
-        heroImages: (heroData.heroImages || []).slice(0, 3),
-        customOrdersImages: (heroData.customOrdersImages || []).slice(0, 4),
-        heroRotationEnabled: !!heroData.heroRotationEnabled,
-      });
     } catch (err) {
       // Already logged per-call; avoid throwing to keep orders visible.
     }
@@ -1053,16 +1019,7 @@ export function AdminPage() {
 
         {activeTab === 'images' && (
           <div className="space-y-10">
-            <AdminHomeTab
-              heroImages={heroConfig.heroImages || []}
-              customOrdersImages={heroConfig.customOrdersImages || []}
-              onHeroChange={(images) => setHeroConfig((prev) => ({ ...prev, heroImages: images }))}
-              onCustomOrdersChange={(images) => setHeroConfig((prev) => ({ ...prev, customOrdersImages: images }))}
-              onSaveHeroConfig={handleSaveHeroConfig}
-              homeSaveState={homeSaveState}
-              heroRotationEnabled={!!heroConfig.heroRotationEnabled}
-              onHeroRotationToggle={(enabled) => setHeroConfig((prev) => ({ ...prev, heroRotationEnabled: enabled }))}
-            />
+            <AdminHomeTab />
 
             <AdminGalleryTab
               images={galleryImages}
@@ -1070,6 +1027,12 @@ export function AdminPage() {
               onSave={async () => {
                 setGallerySaveState('saving');
                 try {
+                  const hasPending = galleryImages.some((img) => img.uploading);
+                  const hasErrors = galleryImages.some((img) => img.uploadError);
+                  const hasInvalid = galleryImages.some((img) => img.imageUrl?.startsWith('blob:') || img.imageUrl?.startsWith('data:'));
+                  if (hasPending) throw new Error('Gallery images are still uploading.');
+                  if (hasErrors) throw new Error('Fix failed gallery uploads before saving.');
+                  if (hasInvalid) throw new Error('Gallery images must be uploaded first (no blob/data URLs).');
                   const normalized = galleryImages.map((img, idx) => ({
                     ...img,
                     position: idx,

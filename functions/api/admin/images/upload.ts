@@ -4,6 +4,8 @@ type Env = {
 };
 
 const BUILD_FINGERPRINT = 'upload-fingerprint-2025-12-21-a';
+const DEFAULT_SCOPE = 'products';
+const VALID_SCOPES = new Set(['products', 'gallery', 'home', 'categories']);
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -37,6 +39,12 @@ const extensionForMime = (mime: string) => {
   }
 };
 
+const resolveScope = (request: Request) => {
+  const url = new URL(request.url);
+  const scope = (url.searchParams.get('scope') || '').toLowerCase();
+  return VALID_SCOPES.has(scope) ? scope : DEFAULT_SCOPE;
+};
+
 export async function onRequestOptions(context: { request: Request }): Promise<Response> {
   const { request } = context;
   console.log('[images/upload] handler', {
@@ -45,6 +53,7 @@ export async function onRequestOptions(context: { request: Request }): Promise<R
     url: request.url,
     contentType: request.headers.get('content-type') || '',
     requestId: request.headers.get('x-upload-request-id'),
+    scope: resolveScope(request),
   });
   return new Response(null, {
     status: 204,
@@ -63,6 +72,7 @@ export async function onRequestGet(context: { request: Request }): Promise<Respo
     url: request.url,
     contentType: request.headers.get('content-type') || '',
     requestId: request.headers.get('x-upload-request-id'),
+    scope: resolveScope(request),
   });
   return json(
     withFingerprint({
@@ -79,6 +89,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
   const { request, env } = context;
   const contentType = request.headers.get('content-type') || '';
   const contentLength = request.headers.get('content-length') || '';
+  const scope = resolveScope(request);
 
   console.log('[images/upload] handler', {
     handler: 'POST',
@@ -86,6 +97,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
     url: request.url,
     contentType,
     requestId: request.headers.get('x-upload-request-id'),
+    scope,
   });
 
   try {
@@ -164,7 +176,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
     const year = now.getUTCFullYear();
     const month = String(now.getUTCMonth() + 1).padStart(2, '0');
     const ext = extensionForMime(file.type);
-    const key = `chesapeake-shell/${year}/${month}/${crypto.randomUUID()}.${ext}`;
+    const key = `chesapeake-shell/${scope}/${year}/${month}/${crypto.randomUUID()}.${ext}`;
 
     try {
       await env.IMAGES_BUCKET.put(key, file.stream(), {

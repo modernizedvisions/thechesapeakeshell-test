@@ -11,8 +11,6 @@ import {
   deleteAdminProduct,
 } from './db/adminProducts';
 import {
-  getHomeHeroConfig,
-  saveHomeHeroConfig as persistHomeHeroConfig,
   fetchShopCategoryTiles as loadShopCategoryTiles,
   saveShopCategoryTiles as persistShopCategoryTiles,
 } from './db/content';
@@ -21,7 +19,7 @@ import { getReviewsForProduct } from './db/reviews';
 import { createEmbeddedCheckoutSession, fetchCheckoutSession } from './payments/checkout';
 import { sendContactEmail } from './contact';
 import { verifyAdminPassword } from './auth';
-import type { Category } from './types';
+import type { Category, HomeSiteContent } from './types';
 
 // Aggregates the mock data layer and stubs so the UI can continue working while we
 // prepare for Cloudflare D1 + Stripe with the site/admin as the source of truth.
@@ -35,14 +33,14 @@ export const adminFetchProducts = fetchAdminProducts;
 export const adminCreateProduct = createAdminProduct;
 export const adminUpdateProduct = updateAdminProduct;
 export const adminDeleteProduct = deleteAdminProduct;
-export const fetchHomeHeroConfig = getHomeHeroConfig;
-export const saveHomeHeroConfig = persistHomeHeroConfig;
 export const fetchShopCategoryTiles = loadShopCategoryTiles;
 export const saveShopCategoryTiles = persistShopCategoryTiles;
 export const fetchReviewsForProduct = getReviewsForProduct;
 // validateCart is no longer exported here (orders/cart validation will be wired separately if needed)
 
 export { createEmbeddedCheckoutSession, fetchCheckoutSession, sendContactEmail, verifyAdminPassword };
+
+export type UploadScope = 'products' | 'gallery' | 'home' | 'categories';
 
 export async function fetchGalleryImages() {
   const response = await fetch('/api/gallery', {
@@ -137,17 +135,26 @@ export async function adminDeleteCategory(id: string): Promise<void> {
 }
 
 export async function adminUploadImage(file: File): Promise<{ id: string; url: string }> {
+  return adminUploadImageScoped(file, { scope: 'products' });
+}
+
+export async function adminUploadImageScoped(
+  file: File,
+  opts?: { scope?: UploadScope }
+): Promise<{ id: string; url: string }> {
   const form = new FormData();
   form.append('file', file, file.name || 'upload');
 
   const rid = crypto.randomUUID();
-  const url = `/api/admin/images/upload?rid=${encodeURIComponent(rid)}`;
+  const scope = opts?.scope || 'products';
+  const url = `/api/admin/images/upload?rid=${encodeURIComponent(rid)}&scope=${encodeURIComponent(scope)}`;
   const method = 'POST';
 
   console.debug('[admin image upload] request', {
     rid,
     url,
     method,
+    scope,
     bodyIsFormData: form instanceof FormData,
     fileCount: 1,
     fileSizes: [file.size],
@@ -183,6 +190,66 @@ export async function adminUploadImage(file: File): Promise<{ id: string; url: s
     throw new Error(`Image upload failed rid=${rid} status=${response.status} body=missing-fields`);
   }
   return { id: data.id, url: data.url };
+}
+
+export async function adminUploadImagesSequential(
+  files: File[],
+  opts?: {
+    scope?: UploadScope;
+    onProgress?: (info: {
+      index: number;
+      total: number;
+      file: File;
+      status: 'start' | 'success' | 'error';
+      result?: { id: string; url: string };
+      error?: string;
+    }) => void;
+  }
+): Promise<Array<{ file: File; result?: { id: string; url: string }; error?: string }>> {
+  const total = files.length;
+  const scope = opts?.scope || 'products';
+  const results: Array<{ file: File; result?: { id: string; url: string }; error?: string }> = [];
+
+  for (let i = 0; i < files.length; i += 1) {
+    const file = files[i];
+    opts?.onProgress?.({ index: i, total, file, status: 'start' });
+    try {
+      const result = await adminUploadImageScoped(file, { scope });
+      results.push({ file, result });
+      opts?.onProgress?.({ index: i, total, file, status: 'success', result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      results.push({ file, error: message });
+      opts?.onProgress?.({ index: i, total, file, status: 'error', error: message });
+    }
+  }
+
+  return results;
+}
+
+export async function getPublicSiteContentHome(): Promise<HomeSiteContent> {
+  const response = await fetch('/api/site-content', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+  if (!response.ok) throw new Error(`Site content API responded with ${response.status}`);
+  const data = await response.json();
+  return (data || {}) as HomeSiteContent;
+}
+
+export async function getAdminSiteContentHome(): Promise<HomeSiteContent> {
+  const response = await fetch('/api/admin/site-content', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+  if (!response.ok) throw new Error(`Admin site content API responded with ${response.status}`);
+  const data = await response.json();
+  return (data?.json || {}) as HomeSiteContent;
+}
+
+export async function updateAdminSiteContentHome(payload: HomeSiteContent): Promise<HomeSiteContent> {
+  const response = await fetch('/api/admin/site-content', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ key: 'home', json: payload }),
+  });
+  if (!response.ok) throw new Error(`Update site content failed: ${response.status}`);
+  const data = await response.json();
+  return (data?.json || {}) as HomeSiteContent;
 }
 
 export async function adminDeleteMessage(id: string): Promise<void> {

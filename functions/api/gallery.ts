@@ -35,6 +35,10 @@ const createGalleryTable = `
   );
 `;
 
+const MAX_URL_LENGTH = 2000;
+
+const isDataUrl = (value: string) => value.trim().toLowerCase().startsWith('data:');
+
 export async function onRequestGet(context: { env: { DB?: D1Database }; request: Request }): Promise<Response> {
   try {
     const db = context.env.DB;
@@ -94,27 +98,46 @@ export async function onRequestPut(context: { env: { DB?: D1Database }; request:
     const images = body.images;
     console.log('[api/gallery] payload keys', Object.keys(body || {}), 'count', images.length, 'method', context.request.method);
 
-    const normalized = images
-      .map((img: any, idx: number) => {
-        const url = typeof img?.imageUrl === 'string' ? img.imageUrl : typeof img?.url === 'string' ? img.url : null;
-        if (!url) return null;
-        return {
-          id: img.id || safeId(`gallery-${idx}`),
-          url,
-          alt: img.alt || img.title || null,
-          hidden: !!img.hidden,
-          sortOrder: Number.isFinite(img.position) ? Number(img.position) : idx,
-          createdAt: img.createdAt || new Date().toISOString(),
-        };
-      })
-      .filter(Boolean) as {
+    let normalized: {
       id: string;
       url: string;
       alt: string | null;
       hidden: boolean;
       sortOrder: number;
       createdAt: string;
-    }[];
+    }[] = [];
+    try {
+      normalized = images
+        .map((img: any, idx: number) => {
+          const url = typeof img?.imageUrl === 'string' ? img.imageUrl : typeof img?.url === 'string' ? img.url : null;
+          if (!url) return null;
+          if (isDataUrl(url)) {
+            throw new Error('Gallery images must be URLs (data URLs are not allowed).');
+          }
+          if (url.length > MAX_URL_LENGTH) {
+            throw new Error(`Gallery image URL too long (max ${MAX_URL_LENGTH} chars).`);
+          }
+          return {
+            id: img.id || safeId(`gallery-${idx}`),
+            url,
+            alt: img.alt || img.title || null,
+            hidden: !!img.hidden,
+            sortOrder: Number.isFinite(img.position) ? Number(img.position) : idx,
+            createdAt: img.createdAt || new Date().toISOString(),
+          };
+        })
+        .filter(Boolean) as {
+        id: string;
+        url: string;
+        alt: string | null;
+        hidden: boolean;
+        sortOrder: number;
+        createdAt: string;
+      }[];
+    } catch (validationError) {
+      const detail = validationError instanceof Error ? validationError.message : 'Invalid image URLs';
+      return json({ error: 'invalid_image_url', detail }, 400);
+    }
 
     const statements = [
       db.prepare(`DELETE FROM gallery_images;`),

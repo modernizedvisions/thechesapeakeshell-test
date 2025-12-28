@@ -2,10 +2,11 @@ import React from 'react';
 import { CheckCircle, Eye, EyeOff, Plus, Trash2, Upload } from 'lucide-react';
 import type { GalleryImage } from '../../lib/types';
 import { AdminSectionHeader } from './AdminSectionHeader';
+import { adminUploadImageScoped } from '../../lib/api';
 
 export interface AdminGalleryTabProps {
   images: GalleryImage[];
-  onChange: (images: GalleryImage[]) => void;
+  onChange: React.Dispatch<React.SetStateAction<GalleryImage[]>>;
   onSave: () => Promise<void>;
   saveState: 'idle' | 'saving' | 'success' | 'error';
   fileInputRef: React.RefObject<HTMLInputElement>;
@@ -31,7 +32,7 @@ export function AdminGalleryTab(props: AdminGalleryTabProps) {
 
 interface GalleryAdminProps {
   images: GalleryImage[];
-  onChange: (images: GalleryImage[]) => void;
+  onChange: React.Dispatch<React.SetStateAction<GalleryImage[]>>;
   onSave: () => Promise<void>;
   saveState: 'idle' | 'saving' | 'success' | 'error';
   fileInputRef: React.RefObject<HTMLInputElement>;
@@ -55,27 +56,64 @@ function GalleryAdmin({
     const fileArray = Array.from(files);
     const allowed = typeof maxImages === 'number' ? Math.max(0, maxImages - images.length) : undefined;
     const selected = typeof allowed === 'number' ? fileArray.slice(0, allowed) : fileArray;
-    const readers = selected.map((file) => {
-      return new Promise<GalleryImage>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          resolve({
-            id: crypto.randomUUID(),
-            imageUrl: reader.result as string,
-            alt: file.name,
-            hidden: false,
-            createdAt: new Date().toISOString(),
-            position: images.length,
-          } as GalleryImage);
-        };
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsDataURL(file);
-      });
+    if (!selected.length) return;
+
+    const queued: GalleryImage[] = selected.map((file, index) => {
+      const previewUrl = URL.createObjectURL(file);
+      return {
+        id: crypto.randomUUID(),
+        imageUrl: previewUrl,
+        alt: file.name,
+        hidden: false,
+        createdAt: new Date().toISOString(),
+        position: images.length + index,
+        uploading: true,
+        uploadError: undefined,
+        previewUrl,
+        file,
+      } as GalleryImage;
     });
 
-    Promise.all(readers)
-      .then((newImages) => onChange([...images, ...newImages]))
-      .catch((err) => console.error('Error reading images', err));
+    onChange([...images, ...queued]);
+
+    const runUploads = async () => {
+      for (const img of queued) {
+        if (!img.file) continue;
+        try {
+          const result = await adminUploadImageScoped(img.file, { scope: 'gallery' });
+          if (img.previewUrl) URL.revokeObjectURL(img.previewUrl);
+          onChange((prev) =>
+            prev.map((entry) =>
+              entry.id === img.id
+                ? {
+                    ...entry,
+                    imageUrl: result.url,
+                    uploading: false,
+                    uploadError: undefined,
+                    previewUrl: undefined,
+                    file: undefined,
+                  }
+                : entry
+            )
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Upload failed';
+          onChange((prev) =>
+            prev.map((entry) =>
+              entry.id === img.id
+                ? {
+                    ...entry,
+                    uploading: false,
+                    uploadError: message,
+                  }
+                : entry
+            )
+          );
+        }
+      }
+    };
+
+    void runUploads();
   };
 
   const handleRemove = (id: string) => {
@@ -105,6 +143,53 @@ function GalleryAdmin({
     const newImages = [...images];
     [newImages[idx], newImages[targetIdx]] = [newImages[targetIdx], newImages[idx]];
     onChange(newImages);
+  };
+
+  const handleRetry = async (id: string) => {
+    const target = images.find((img) => img.id === id);
+    if (!target?.file) return;
+    onChange((prev) =>
+      prev.map((img) =>
+        img.id === id
+          ? {
+              ...img,
+              uploading: true,
+              uploadError: undefined,
+            }
+          : img
+      )
+    );
+    try {
+      const result = await adminUploadImageScoped(target.file, { scope: 'gallery' });
+      if (target.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      onChange((prev) =>
+        prev.map((img) =>
+          img.id === id
+            ? {
+                ...img,
+                imageUrl: result.url,
+                uploading: false,
+                uploadError: undefined,
+                previewUrl: undefined,
+                file: undefined,
+              }
+            : img
+        )
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      onChange((prev) =>
+        prev.map((img) =>
+          img.id === id
+            ? {
+                ...img,
+                uploading: false,
+                uploadError: message,
+              }
+            : img
+        )
+      );
+    }
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
@@ -178,8 +263,18 @@ function GalleryAdmin({
         {images.map((img, idx) => (
           <div key={img.id} className="relative group rounded-lg overflow-hidden border border-gray-200">
             <div className="aspect-square bg-gray-100">
-              <img src={img.imageUrl} alt={img.alt || `Gallery image ${idx + 1}`} className="w-full h-full object-cover" />
+              <img src={img.previewUrl || img.imageUrl} alt={img.alt || `Gallery image ${idx + 1}`} className="w-full h-full object-cover" />
+              {img.uploading && (
+                <div className="absolute inset-0 bg-white/70 flex items-center justify-center text-xs text-gray-700">
+                  Uploading...
+                </div>
+              )}
             </div>
+            {img.uploadError && (
+              <div className="absolute inset-x-0 top-0 bg-red-600/90 text-white text-[10px] px-2 py-1">
+                Upload failed
+              </div>
+            )}
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="flex items-center justify-between text-white text-xs">
                 <button
@@ -200,6 +295,18 @@ function GalleryAdmin({
                   )}
                 </button>
                 <div className="flex items-center gap-1">
+                  {img.uploadError && img.file && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleRetry(img.id);
+                      }}
+                      className="bg-white/10 px-2 py-1 rounded hover:bg-white/20"
+                    >
+                      Retry
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleMove(img.id, 'up')}
