@@ -113,7 +113,7 @@ export function ContactForm() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">GET IN TOUCH</h2>
-          <p className="mt-3 text-sm md:text-base text-slate-600 max-w-2xl mx-auto font-serif">
+          <p className="mt-3 text-sm md:text-base text-slate-600 max-w-2xl mx-auto font-serif subtitle-text">
             Have an idea or a question? Reach out below.
           </p>
         </div>
@@ -209,7 +209,7 @@ export function ContactForm() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-gray-900 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gray-900 text-white py-3 px-6 rounded-lg rounded-ui font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Sending...' : 'Send Message'}
             </button>

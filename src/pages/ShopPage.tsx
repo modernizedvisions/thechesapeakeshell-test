@@ -384,7 +384,7 @@ export function ShopPage() {
           <h1 className="text-4xl sm:text-5xl font-serif font-bold tracking-wide text-gray-900">
             THE COLLECTION
           </h1>
-          <p className="text-gray-600 text-lg mt-2 font-serif">
+          <p className="text-gray-600 text-lg mt-2 font-serif subtitle-text">
             One-of-a-kind shell art, crafted with care on the Chesapeake Bay.
           </p>
         </div>
@@ -396,7 +396,7 @@ export function ShopPage() {
               return null;
             }
             const isActive = activeCategorySlug === category.slug;
-            return (
+              return (
               <button
                 key={category.slug}
                 onClick={() => {
@@ -404,7 +404,7 @@ export function ShopPage() {
                   searchParams.set('type', category.slug);
                   setSearchParams(searchParams, { replace: true });
                 }}
-                className={`px-4 py-1.5 rounded-full border text-sm transition ${
+                className={`px-4 py-1.5 rounded-full rounded-ui border text-sm transition ${
                   isActive
                     ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'

@@ -21,6 +21,14 @@
   border-radius: 0 !important;
 }
 
+.subtitle-text {
+  color: #000 !important;
+}
+
+.rounded-ui {
+  border-radius: 9999px !important;
+}
+
 @layer base {
   body {
     @apply font-sans text-gray-900 bg-white;

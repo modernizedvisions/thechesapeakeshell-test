@@ -28,19 +28,19 @@ export default function HomeHero({ heroImages = [], heroRotationEnabled = false 
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-semibold tracking-tight text-slate-900">
               PIECES OF THE COAST, BRUSHED WITH COLOR.
             </h1>
-            <p className="mt-3 max-w-lg text-base sm:text-lg text-slate-600 font-serif">
+            <p className="mt-3 max-w-lg text-base sm:text-lg text-slate-600 font-serif subtitle-text">
               Hand-painted shell art and coastal gifts — each piece is one-of-a-kind and made to brighten your home.
             </p>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 to="/shop"
-                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 focus:ring-offset-white/70"
+                className="inline-flex items-center justify-center rounded-full rounded-ui bg-slate-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 focus:ring-offset-white/70"
               >
                 Shop New Art
               </Link>
               <Link
                 to="/gallery"
-                className="inline-flex items-center justify-center rounded-full border border-slate-300 bg-white/70 px-5 py-2.5 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 focus:ring-offset-white/70"
+                className="inline-flex items-center justify-center rounded-full rounded-ui border border-slate-300 bg-white/70 px-5 py-2.5 text-sm font-medium text-slate-900 shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2 focus:ring-offset-white/70"
               >
                 View Gallery
               </Link>

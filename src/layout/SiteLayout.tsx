@@ -53,7 +53,7 @@ export function SiteLayout() {
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <button
                 type="button"
-                className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="md:hidden p-2 rounded-lg rounded-ui hover:bg-gray-100 transition-colors"
                 aria-label="Open navigation menu"
                 onClick={() => setNavDrawerOpen(true)}
               >
@@ -71,7 +71,7 @@ export function SiteLayout() {
                 <Link
                   key={link.to}
                   to={link.to}
-                  className="text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors uppercase tracking-[0.12em]"
+                  className="text-sm font-semibold text-gray-700 hover:text-gray-900 transition-colors uppercase tracking-[0.12em] font-serif rounded-ui px-2 py-1"
                 >
                   {link.label}
                 </Link>
@@ -96,7 +96,7 @@ export function SiteLayout() {
               <h2 className="text-lg font-semibold text-gray-900 uppercase tracking-[0.08em]">Menu</h2>
               <button
                 type="button"
-                className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                className="p-2 rounded-full rounded-ui hover:bg-gray-100 transition-colors"
                 aria-label="Close navigation menu"
                 onClick={() => setNavDrawerOpen(false)}
               >
@@ -109,7 +109,7 @@ export function SiteLayout() {
                   key={link.to}
                   to={link.to}
                   onClick={() => setNavDrawerOpen(false)}
-                  className="block rounded-lg px-3 py-2 text-base font-semibold text-gray-800 hover:bg-gray-100 transition-colors uppercase tracking-[0.1em]"
+                  className="block rounded-lg rounded-ui px-3 py-2 text-base font-semibold text-gray-800 hover:bg-gray-100 transition-colors uppercase tracking-[0.1em] font-serif"
                 >
                   {link.label}
                 </Link>

@@ -13,7 +13,7 @@ function TikTokProfileCard() {
       href="https://www.tiktok.com/@thechesapeakeshell"
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center justify-between gap-3 rounded-2xl bg-black px-4 py-3 md:px-5 md:py-3.5 shadow-md hover:shadow-lg hover:opacity-95 transition"
+      className="inline-flex items-center justify-between gap-3 rounded-2xl rounded-ui bg-black px-4 py-3 md:px-5 md:py-3.5 shadow-md hover:shadow-lg hover:opacity-95 transition"
     >
       <div className="flex items-center gap-3">
         <div className="relative h-8 w-8 rounded-full overflow-hidden bg-slate-800">
@@ -41,7 +41,7 @@ function InstagramProfileCard() {
       href="https://www.instagram.com/thechesapeakeshell"
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 md:px-5 md:py-3.5 shadow-md border border-slate-200 hover:shadow-lg hover:bg-slate-50 transition"
+      className="inline-flex items-center justify-between gap-3 rounded-2xl rounded-ui bg-white px-4 py-3 md:px-5 md:py-3.5 shadow-md border border-slate-200 hover:shadow-lg hover:bg-slate-50 transition"
     >
       <div className="flex items-center gap-3">
         <div className="relative h-8 w-8 rounded-full overflow-hidden bg-slate-200">
@@ -309,7 +309,7 @@ export function HomePage() {
                       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/55 to-transparent" />
 
                       <div className="absolute inset-x-0 bottom-4 flex justify-center">
-                        <span className="pointer-events-auto inline-flex items-center rounded-full bg-white px-6 py-2 text-sm font-medium text-gray-900 shadow-sm transition-colors group-hover:bg-gray-900 group-hover:text-white">
+                        <span className="pointer-events-auto inline-flex items-center rounded-full rounded-ui bg-white px-6 py-2 text-sm font-medium text-gray-900 shadow-sm transition-colors group-hover:bg-gray-900 group-hover:text-white">
                           {`Shop ${category.name}`}
                         </span>
                       </div>
@@ -321,7 +321,7 @@ export function HomePage() {
               <div className="flex justify-center mt-10">
                 <Link
                   to="/shop"
-                  className="inline-flex items-center justify-center rounded-full bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+                  className="inline-flex items-center justify-center rounded-full rounded-ui bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
                 >
                   Explore the Whole Collection
                 </Link>
@@ -339,7 +339,7 @@ export function HomePage() {
         <div className="mx-auto max-w-6xl px-4">
           <div className="text-center mb-10 md:mb-12">
             <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">CUSTOM ORDERS</h2>
-            <p className="mt-3 text-sm md:text-base text-slate-600 max-w-2xl mx-auto font-serif">
+            <p className="mt-3 text-sm md:text-base text-slate-600 max-w-2xl mx-auto font-serif subtitle-text">
               Have something specific in mind? From wedding parties to special dates and colors, I’m happy to create custom oyster shell pieces that feel personal to you — or to someone you love.
             </p>
           </div>
@@ -386,7 +386,7 @@ export function HomePage() {
           <div className="flex justify-center mt-10">
             <button
               onClick={handleScrollToContact}
-              className="inline-flex items-center justify-center rounded-full bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              className="inline-flex items-center justify-center rounded-full rounded-ui bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
             >
               Start a Custom Order
             </button>
@@ -414,7 +414,7 @@ export function HomePage() {
         <div className="mx-auto max-w-6xl px-4">
           <div className="text-center mb-6">
             <h2 className="text-2xl md:text-3xl font-semibold text-slate-900">FOLLOW ALONG</h2>
-            <p className="mt-3 text-sm md:text-base text-slate-600 max-w-xl mx-auto font-serif">
+            <p className="mt-3 text-sm md:text-base text-slate-600 max-w-xl mx-auto font-serif subtitle-text">
               See new pieces and find out where I’ll be for craft shows and pop-ups — follow on social to stay up to date.
             </p>
           </div>
@@ -424,7 +424,7 @@ export function HomePage() {
               href="https://instagram.com/thechesapeakeshell"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 bg-white border border-slate-200 shadow-md rounded-xl px-6 py-3 hover:opacity-90 transition"
+              className="flex items-center gap-3 bg-white border border-slate-200 shadow-md rounded-xl rounded-ui px-6 py-3 hover:opacity-90 transition"
             >
               <img
                 src="https://files.reimage.dev/modernizedvisions/d8f83b8f2c6e/original"
@@ -441,7 +441,7 @@ export function HomePage() {
               href="https://www.tiktok.com/@thechesapeakeshell"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 bg-black text-white shadow-md rounded-xl px-6 py-3 hover:opacity-90 transition"
+              className="flex items-center gap-3 bg-black text-white shadow-md rounded-xl rounded-ui px-6 py-3 hover:opacity-90 transition"
             >
               <img
                 src="https://files.reimage.dev/modernizedvisions/e5eaa1654c4f/original"

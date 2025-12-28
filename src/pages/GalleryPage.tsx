@@ -32,13 +32,13 @@ export function GalleryPage() {
         <h1 className="text-center text-3xl md:text-4xl font-semibold uppercase tracking-wide text-slate-900 mb-2">
           Gallery
         </h1>
-        <p className="text-center text-slate-600 text-sm md:text-base mb-10">
+        <p className="text-center text-slate-600 text-sm md:text-base mb-10 font-serif subtitle-text">
           Explore our collection of art pieces and sold works.
         </p>
         <div className="flex justify-center mb-8">
           <Link
             to="/shop"
-            className="inline-flex items-center justify-center rounded-full bg-gray-900 px-6 py-2 text-sm font-medium text-white shadow-md transition hover:bg-gray-800"
+            className="inline-flex items-center justify-center rounded-full rounded-ui bg-gray-900 px-6 py-2 text-sm font-medium text-white shadow-md transition hover:bg-gray-800"
           >
             Shop The Collection
           </Link>
