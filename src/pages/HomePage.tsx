@@ -178,7 +178,8 @@ export function HomePage() {
   };
 
   const customImagesToShow = customOrderImages.length ? customOrderImages : fallbackCustomShellImages;
-  const followBg = 'var(--follow-bg, #f1f5f9)';
+  const followBg = '#ffffff';
+  const contactBg = 'var(--follow-bg, #f1f5f9)';
 
   // DEBUG: log divider layout/styling to diagnose seam/orientation issues. Remove after diagnosis.
   useEffect(() => {
@@ -461,7 +462,7 @@ export function HomePage() {
       >
         <WaveDivider
           direction="down"
-          fill="#ffffff"
+          fill={contactBg}
           className="block"
           dataTestId="divider-contact-follow"
         />
