@@ -788,20 +788,16 @@ export const AdminShopTab: React.FC<AdminShopTabProps> = ({
                       )}
                     </select>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <label className="text-sm font-medium text-gray-700">One-off</label>
-                    <input
-                      type="checkbox"
+                  <div className="flex flex-col gap-2">
+                    <ToggleSwitchSmall
+                      label="One-off"
                       checked={!!editProductForm?.isOneOff}
-                      onChange={(e) => onEditFormChange('isOneOff', e.target.checked)}
-                      className="h-4 w-4"
+                      onChange={(val) => onEditFormChange('isOneOff', val)}
                     />
-                    <label className="text-sm font-medium text-gray-700">Active</label>
-                    <input
-                      type="checkbox"
+                    <ToggleSwitchSmall
+                      label="Active"
                       checked={!!editProductForm?.isActive}
-                      onChange={(e) => onEditFormChange('isActive', e.target.checked)}
-                      className="h-4 w-4"
+                      onChange={(val) => onEditFormChange('isActive', val)}
                     />
                   </div>
                 </div>
@@ -952,16 +948,42 @@ function ToggleSwitch({ label, description, checked, onChange }: ToggleSwitchPro
   return (
     <button type="button" onClick={() => onChange(!checked)} className="flex items-center gap-3">
       <span
-        className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${trackClasses}`}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full rounded-ui border transition-colors ${trackClasses}`}
       >
         <span
-          className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${thumbClasses}`}
+          className={`inline-block h-4 w-4 rounded-full rounded-ui bg-white shadow transform transition-transform ${thumbClasses}`}
         />
       </span>
       <div className="flex flex-col text-left">
         <span className="text-sm font-medium text-slate-800">{label}</span>
         {description && <span className="text-xs text-slate-500">{description}</span>}
       </div>
+    </button>
+  );
+}
+
+function ToggleSwitchSmall({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  const trackClasses = checked ? 'bg-slate-900 border-slate-900' : 'bg-slate-200 border-slate-300';
+  const thumbClasses = checked ? 'translate-x-4' : 'translate-x-0.5';
+
+  return (
+    <button type="button" onClick={() => onChange(!checked)} className="flex items-center gap-2">
+      <span
+        className={`relative inline-flex h-5 w-9 items-center rounded-full rounded-ui border transition-colors ${trackClasses}`}
+      >
+        <span
+          className={`inline-block h-4 w-4 rounded-full rounded-ui bg-white shadow transform transition-transform ${thumbClasses}`}
+        />
+      </span>
+      <span className="text-sm font-medium text-gray-700">{label}</span>
     </button>
   );
 }

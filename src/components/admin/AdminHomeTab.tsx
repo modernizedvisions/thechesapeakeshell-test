@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle, Loader2, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { Category, CustomOrdersImage, HeroCollageImage, HomeSiteContent } from '../../lib/types';
 import { AdminSectionHeader } from './AdminSectionHeader';
+import { AdminSaveButton } from './AdminSaveButton';
 import { adminFetchCategories, adminUploadImageScoped, getAdminSiteContentHome, updateAdminSiteContentHome } from '../../lib/api';
 import { ShopCategoryCardsSection } from './ShopCategoryCardsSection';
 
@@ -226,25 +227,7 @@ function HeroCollageAdmin({
           </label>
         </div>
         <div className="flex justify-center sm:justify-end">
-          <button
-            onClick={onSave}
-            disabled={saveState === 'saving'}
-            className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
-          >
-            {saveState === 'saving' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : saveState === 'success' ? (
-              <>
-                <CheckCircle className="h-4 w-4 text-green-200" />
-                Saved
-              </>
-            ) : (
-              'Save'
-            )}
-          </button>
+          <AdminSaveButton saveState={saveState} onClick={onSave} />
         </div>
       </div>
 
@@ -411,25 +394,7 @@ function CustomOrdersImagesAdmin({ images, onChange, onSave, saveState }: Custom
           subtitle="images shown beside the custom orders section."
         />
         <div className="flex justify-center sm:justify-end">
-          <button
-            onClick={onSave}
-            disabled={saveState === 'saving'}
-            className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
-          >
-            {saveState === 'saving' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : saveState === 'success' ? (
-              <>
-                <CheckCircle className="h-4 w-4 text-green-200" />
-                Saved
-              </>
-            ) : (
-              'Save'
-            )}
-          </button>
+          <AdminSaveButton saveState={saveState} onClick={onSave} />
         </div>
       </div>
 

@@ -1,8 +1,8 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Loader2 } from 'lucide-react';
 import { fetchShopCategoryTiles, saveShopCategoryTiles, adminUpdateCategory, adminUploadImageScoped } from '../../lib/api';
 import type { Category, ShopCategoryTile } from '../../lib/types';
 import { AdminSectionHeader } from './AdminSectionHeader';
+import { AdminSaveButton, type AdminSaveState } from './AdminSaveButton';
 
 interface ShopCategoryCardsSectionProps {
   categories?: Category[];
@@ -13,7 +13,7 @@ const SLOT_COUNT = 4;
 
 export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }: ShopCategoryCardsSectionProps) {
   const [tiles, setTiles] = useState<ShopCategoryTile[]>([]);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'success'>('idle');
+  const [saveState, setSaveState] = useState<AdminSaveState>('idle');
   const [activeTileId, setActiveTileId] = useState<string | null>(null);
   const [categoryState, setCategoryState] = useState<Category[]>(categories);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -122,7 +122,7 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
       setTimeout(() => setSaveState('idle'), 1500);
     } catch (err) {
       console.error('Failed to save category tiles', err);
-      setSaveState('idle');
+      setSaveState('error');
     }
   };
 
@@ -155,23 +155,16 @@ export function ShopCategoryCardsSection({ categories = [], onCategoryUpdated }:
           className="text-center"
         />
         <div className="absolute right-0 top-0 flex justify-end">
-          <button
-            type="button"
+          <AdminSaveButton
+            saveState={saveState}
             onClick={handleSave}
-            disabled={saveState === 'saving'}
-            className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-60"
-          >
-            {saveState === 'saving' ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : saveState === 'success' ? (
-              'Saved'
-            ) : (
-              'Save Category Cards'
-            )}
-          </button>
+            idleLabel="Save Category Cards"
+          />
+        </div>
+        <div className="mt-2 text-xs text-gray-600">
+          {saveState === 'saving' && 'Saving changes...'}
+          {saveState === 'success' && 'Category cards saved.'}
+          {saveState === 'error' && 'Save failed. Please retry.'}
         </div>
       </div>
 
