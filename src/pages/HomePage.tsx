@@ -280,6 +280,9 @@ export function HomePage() {
         style={{ backgroundColor: '#D1D2F9' }}
         data-testid="section-hero-shop"
       >
+        <div className="w-full leading-[0] m-0 p-0 overflow-hidden" style={{ backgroundColor: '#ffffff' }}>
+          <WaveDivider direction="down" fill="#D1D2F9" className="block" dataTestId="divider-hero-shop" />
+        </div>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 md:pt-16">
             <h2 className="text-3xl font-serif font-semibold text-gray-900 mb-8 text-center">
               SHOP THE COLLECTION
