@@ -292,19 +292,22 @@ export const onRequestPost = async (context: {
       });
 
       if (insertResult && customerEmail) {
-        const confirmationItems: OrderConfirmationEmailItem[] = mapLineItemsToEmailItems(
-          rawLineItems,
-          session.currency || 'usd'
-        ).map((item) => ({
-          name: item.name,
-          qty: item.quantity,
-          unitAmount:
-            item.quantity && item.quantity > 0
-              ? Math.round((item.amountCents || 0) / item.quantity)
-              : item.amountCents || 0,
-          lineTotal: item.amountCents || 0,
-          imageUrl: item.imageUrl || undefined,
-        }));
+      const baseEmailItems = await mapLineItemsToEmailItemsWithImages(
+        env.DB,
+        rawLineItems,
+        session.currency || 'usd',
+        siteUrl
+      );
+      const confirmationItems: OrderConfirmationEmailItem[] = baseEmailItems.map((item) => ({
+        name: item.name,
+        qty: item.quantity,
+        unitAmount:
+          item.quantity && item.quantity > 0
+            ? Math.round((item.amountCents || 0) / item.quantity)
+            : item.amountCents || 0,
+        lineTotal: item.amountCents || 0,
+        imageUrl: item.imageUrl || undefined,
+      }));
 
         const totalsForEmail = resolveStandardEmailTotals({
           session,
@@ -322,9 +325,15 @@ export const onRequestPost = async (context: {
 
         const confirmationUrl =
           siteUrl ? `${siteUrl}/checkout/return?session_id=${session.id}` : `/checkout/return?session_id=${session.id}`;
+        const storeUrl = siteUrl || confirmationUrl;
         const orderLabel = insertResult.displayOrderId || insertResult.orderId;
         const orderDate = formatOrderDate(new Date());
-        const shippingAddressText = formatShippingAddress(shippingAddress);
+        const shippingAddressText = formatAddressForEmail(shippingAddress, shippingName);
+        const billingAddressText = formatAddressForEmail(
+          session.customer_details?.address || null,
+          session.customer_details?.name || shippingName
+        );
+        const paymentMethodLabel = formatPaymentMethod(cardBrand, cardLast4);
 
         try {
           const html = renderOrderConfirmationEmailHtml({
@@ -334,12 +343,14 @@ export const onRequestPost = async (context: {
             customerName: shippingName || session.customer_details?.name || null,
             customerEmail: customerEmail || undefined,
             shippingAddress: shippingAddressText || undefined,
+            billingAddress: billingAddressText || undefined,
+            paymentMethod: paymentMethodLabel,
             items: confirmationItems,
             subtotal: totalsForEmail.subtotalCents,
             shipping: totalsForEmail.shippingCents,
             total: totalsForEmail.totalCents,
-            primaryCtaUrl: confirmationUrl,
-            primaryCtaLabel: 'View order details',
+            primaryCtaUrl: storeUrl,
+            primaryCtaLabel: 'Visit Store',
           });
           const text = renderOrderConfirmationEmailText({
             brandName: 'The Chesapeake Shell',
@@ -348,12 +359,14 @@ export const onRequestPost = async (context: {
             customerName: shippingName || session.customer_details?.name || null,
             customerEmail: customerEmail || undefined,
             shippingAddress: shippingAddressText || undefined,
+            billingAddress: billingAddressText || undefined,
+            paymentMethod: paymentMethodLabel,
             items: confirmationItems,
             subtotal: totalsForEmail.subtotalCents,
             shipping: totalsForEmail.shippingCents,
             total: totalsForEmail.totalCents,
-            primaryCtaUrl: confirmationUrl,
-            primaryCtaLabel: 'View order details',
+            primaryCtaUrl: storeUrl,
+            primaryCtaLabel: 'Visit Store',
           });
 
         const emailResult = await sendEmail(
@@ -924,6 +937,58 @@ function mapLineItemsToEmailItems(lineItems: Stripe.LineItem[], currency: string
   });
 }
 
+async function mapLineItemsToEmailItemsWithImages(
+  db: D1Database,
+  lineItems: Stripe.LineItem[],
+  currency: string,
+  siteUrl: string
+): Promise<EmailItem[]> {
+  const fallbackImage = siteUrl ? `${siteUrl}/images/logo-circle.png` : null;
+  const items = filterNonShippingLineItems(lineItems).map((line) => {
+    const productObj =
+      line.price?.product && typeof line.price.product !== 'string'
+        ? (line.price.product as Stripe.Product)
+        : null;
+    const productId =
+      typeof line.price?.product === 'string'
+        ? line.price.product
+        : (line.price?.product as Stripe.Product | undefined)?.id || null;
+    const name =
+      line.description ||
+      productObj?.name ||
+      (line.price as any)?.product_data?.name ||
+      'Item';
+    const imageUrl =
+      productObj?.images?.[0] ||
+      (line.price as any)?.product_data?.images?.[0] ||
+      null;
+    return {
+      name,
+      quantity: line.quantity ?? 1,
+      amountCents: line.amount_total ?? (line.price?.unit_amount ?? 0) * (line.quantity ?? 1),
+      imageUrl,
+      productId,
+    };
+  });
+
+  const results: EmailItem[] = [];
+  for (const item of items) {
+    let imageUrl = item.imageUrl || null;
+    if (!imageUrl && item.productId) {
+      imageUrl = await resolveProductImageUrl(db, item.productId);
+    }
+    imageUrl = toAbsoluteUrl(imageUrl, siteUrl) || fallbackImage;
+    results.push({
+      name: item.name,
+      quantity: item.quantity,
+      amountCents: item.amountCents,
+      imageUrl,
+    });
+  }
+
+  return results;
+}
+
 async function handleCustomOrderPayment(args: {
   db: D1Database;
   env: Env;
@@ -1085,8 +1150,14 @@ async function handleCustomOrderPayment(args: {
     const confirmationUrl = siteUrlForConfirmation
       ? `${siteUrlForConfirmation}/checkout/return?session_id=${session.id}`
       : `/checkout/return?session_id=${session.id}`;
+    const storeUrl = siteUrlForConfirmation || confirmationUrl;
     const orderDate = formatOrderDate(new Date());
-    const shippingAddressText = formatShippingAddress(shippingAddress);
+    const shippingAddressText = formatAddressForEmail(shippingAddress, shippingName);
+    const billingAddressText = formatAddressForEmail(
+      session.customer_details?.address || null,
+      session.customer_details?.name || shippingName
+    );
+    const paymentMethodLabel = formatPaymentMethod(cardBrand, cardLast4);
     const totalsForEmail = resolveCustomEmailTotals({
       order: {
         total_cents: totalCents,
@@ -1122,12 +1193,14 @@ async function handleCustomOrderPayment(args: {
         customerName: customOrder.customer_name || shippingName || session.customer_details?.name || null,
         customerEmail: confirmationCustomerEmail || undefined,
         shippingAddress: shippingAddressText || undefined,
+        billingAddress: billingAddressText || undefined,
+        paymentMethod: paymentMethodLabel,
         items: confirmationItems,
         subtotal: totalsForEmail.subtotalCents,
         shipping: totalsForEmail.shippingCents,
         total: totalsForEmail.totalCents,
-        primaryCtaUrl: confirmationUrl,
-        primaryCtaLabel: 'View order details',
+        primaryCtaUrl: storeUrl,
+        primaryCtaLabel: 'Visit Store',
       });
       const text = renderOrderConfirmationEmailText({
         brandName: 'The Chesapeake Shell',
@@ -1136,12 +1209,14 @@ async function handleCustomOrderPayment(args: {
         customerName: customOrder.customer_name || shippingName || session.customer_details?.name || null,
         customerEmail: confirmationCustomerEmail || undefined,
         shippingAddress: shippingAddressText || undefined,
+        billingAddress: billingAddressText || undefined,
+        paymentMethod: paymentMethodLabel,
         items: confirmationItems,
         subtotal: totalsForEmail.subtotalCents,
         shipping: totalsForEmail.shippingCents,
         total: totalsForEmail.totalCents,
-        primaryCtaUrl: confirmationUrl,
-        primaryCtaLabel: 'View order details',
+        primaryCtaUrl: storeUrl,
+        primaryCtaLabel: 'Visit Store',
       });
 
       const emailResult = await sendEmail(
@@ -1472,6 +1547,65 @@ function formatShippingAddress(address: Stripe.Address | Stripe.ShippingAddress 
     .map((p) => (p || '').trim())
     .filter(Boolean);
   return parts.join(', ');
+}
+
+function formatAddressForEmail(
+  address: Stripe.Address | Stripe.ShippingAddress | null,
+  name?: string | null
+): string {
+  if (!address) return '';
+  const parts = [
+    name,
+    address.line1,
+    address.line2,
+    [address.city, address.state].filter(Boolean).join(', '),
+    address.postal_code,
+    address.country,
+  ]
+    .map((p) => (p || '').trim())
+    .filter(Boolean);
+  return parts.join('\n');
+}
+
+function formatPaymentMethod(cardBrand: string | null, cardLast4: string | null): string {
+  if (!cardLast4) return 'Card';
+  const label = cardBrand ? titleCase(cardBrand) : 'Card';
+  return `${label} ending in ${cardLast4}`;
+}
+
+function titleCase(value: string): string {
+  return value
+    .toLowerCase()
+    .split(' ')
+    .map((part) => (part ? part[0].toUpperCase() + part.slice(1) : ''))
+    .join(' ')
+    .trim();
+}
+
+async function resolveProductImageUrl(db: D1Database, productId: string): Promise<string | null> {
+  if (!productId) return null;
+  const row = await db
+    .prepare(`SELECT image_url, image_urls_json FROM products WHERE stripe_product_id = ? OR id = ? LIMIT 1;`)
+    .bind(productId, productId)
+    .first<{ image_url: string | null; image_urls_json: string | null }>();
+  if (!row) return null;
+  if (row.image_url) return row.image_url;
+  if (row.image_urls_json) {
+    try {
+      const parsed = JSON.parse(row.image_urls_json);
+      if (Array.isArray(parsed) && parsed[0]) return parsed[0];
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function toAbsoluteUrl(url: string | null, siteUrl: string): string | null {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('/')) return siteUrl ? `${siteUrl}${url}` : url;
+  return url;
 }
 
 function resolveSiteUrl(env: {

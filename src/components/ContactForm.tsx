@@ -117,7 +117,7 @@ export function ContactForm() {
             Interested in a custom piece or looking for something specific? Send a message and we’ll reply shortly.
           </p>
         </div>
-        <div className="w-full max-w-4xl mx-auto rounded-2xl border border-slate-200 shadow-lg bg-white overflow-hidden p-4 sm:p-6 md:p-8">
+        <div className="w-full max-w-4xl mx-auto rounded-2xl rounded-ui border border-slate-200 shadow-lg bg-white overflow-hidden p-4 sm:p-6 md:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">

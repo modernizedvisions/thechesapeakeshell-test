@@ -274,7 +274,12 @@ export function HomePage() {
     <div className="bg-white">
       <HomeHero heroImages={heroImages} heroRotationEnabled={heroRotationEnabled} />
 
-      <section className="pt-12 md:pt-16 pb-16 bg-white" data-testid="section-hero-shop">
+      <section
+        className="pt-12 md:pt-16 pb-16"
+        style={{ backgroundColor: '#D1D2F9' }}
+        data-testid="section-hero-shop"
+      >
+        <WaveDivider direction="down" fill="#D1D2F9" className="bg-white" dataTestId="divider-hero-shop" />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
             <h2 className="text-3xl font-serif font-semibold text-gray-900 mb-8 text-center">
               SHOP THE COLLECTION
@@ -319,7 +324,7 @@ export function HomePage() {
 
                       <Link
                         to={`/shop?type=${encodeURIComponent(category.slug || tile.categorySlug || '')}`}
-                        className="mt-3 inline-flex items-center rounded-full rounded-ui bg-white px-6 py-2 text-sm font-medium font-serif text-gray-900 shadow-sm transition-colors group-hover:bg-gray-900 group-hover:text-white hover:bg-gray-900 hover:text-white"
+                        className="mt-3 inline-flex items-center rounded-full rounded-ui bg-gray-900 px-6 py-2 text-sm font-medium font-serif text-white shadow-sm transition-colors"
                       >
                         {`Shop ${category.name}`}
                       </Link>
@@ -396,7 +401,7 @@ export function HomePage() {
           <div className="flex justify-center mt-10">
             <button
               onClick={handleScrollToContact}
-              className="inline-flex items-center justify-center rounded-full rounded-ui bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
             >
               Start a Custom Order
             </button>

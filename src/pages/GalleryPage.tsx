@@ -59,7 +59,7 @@ export function GalleryPage() {
                   {galleryImages.map((item) => (
                     <div key={item.id} className="relative group cursor-pointer">
                       <div
-                        className="aspect-[4/3] overflow-hidden rounded-lg bg-gray-100"
+                        className="aspect-[4/3] overflow-hidden rounded-lg bg-transparent"
                         onClick={() => setSelectedImage(item.imageUrl)}
                       >
                         <img
@@ -85,14 +85,14 @@ export function GalleryPage() {
                   {soldProducts.map((item) => (
                     <div key={item.id} className="group bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                       <div
-                        className="relative aspect-[4/3] overflow-hidden bg-gray-100 cursor-pointer"
+                        className="relative aspect-square overflow-hidden bg-gray-100 cursor-pointer"
                         onClick={() => setSelectedImage(item.imageUrl)}
                       >
                         {item.imageUrl ? (
                           <img
                             src={item.imageUrl}
                             alt={item.name}
-                            className="w-full h-full object-contain"
+                            className="w-full h-full object-cover"
                           />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-400">
