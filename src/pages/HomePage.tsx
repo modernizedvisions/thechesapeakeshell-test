@@ -379,7 +379,7 @@ export function HomePage() {
 
       <div
         className="w-full leading-[0] m-0 p-0 overflow-hidden -mb-px"
-        style={{ backgroundColor: contactBg }}
+        style={{ backgroundColor: '#ffffff' }}
         data-testid="divider-contact-follow"
       >
         <WaveDivider
@@ -390,7 +390,9 @@ export function HomePage() {
         />
       </div>
 
-      <ContactForm backgroundColor={contactBg} />
+      <div className="-mt-px">
+        <ContactForm backgroundColor={contactBg} />
+      </div>
     </div>
   );
 }
