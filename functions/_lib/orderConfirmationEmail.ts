@@ -31,7 +31,7 @@ export function renderOrderConfirmationEmailHtml(params: OrderConfirmationEmailP
   const shippingAddress = params.shippingAddress || '';
   const billingAddress = params.billingAddress || '';
   const paymentMethod = params.paymentMethod || 'Card';
-  const primaryCtaLabel = params.primaryCtaLabel || 'Visit Store';
+  const primaryCtaLabel = params.primaryCtaLabel || 'View order details';
 
   const itemRows = (params.items || []).map((item) => {
     const qty = item.qty && item.qty > 1 ? `x ${item.qty}` : '';
@@ -89,13 +89,10 @@ export function renderOrderConfirmationEmailHtml(params: OrderConfirmationEmailP
                 <div style="font-family:'Playfair Display', Georgia, 'Times New Roman', serif; font-size:28px; font-weight:600; color:#111827; margin-bottom:6px;">
                   Thank you for your purchase!
                 </div>
-                <div style="font-family:'Playfair Display', Georgia, 'Times New Roman', serif; font-size:14px; color:#6b7280; margin-bottom:18px;">
-                  ${escapeHtml(brand)}
-                </div>
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-top:16px;">
                   <tr>
-                    <td>
-                      <a href="${escapeHtml(params.primaryCtaUrl)}" style="display:block; text-align:center; padding:14px 0; background:#111827; color:#ffffff; text-decoration:none; font-family:'Playfair Display', Georgia, 'Times New Roman', serif; font-size:14px; letter-spacing:0.04em; text-transform:uppercase;">
+                    <td bgcolor="#111827" style="border-radius:9999px;">
+                      <a href="${escapeHtml(params.primaryCtaUrl)}" style="display:inline-block;padding:12px 20px;font-family:'Playfair Display', Georgia, 'Times New Roman', serif;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:9999px;">
                         ${escapeHtml(primaryCtaLabel)}
                       </a>
                     </td>

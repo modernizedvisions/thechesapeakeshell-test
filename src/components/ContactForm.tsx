@@ -117,7 +117,7 @@ export function ContactForm() {
             Interested in a custom piece or looking for something specific? Send a message and we’ll reply shortly.
           </p>
         </div>
-        <div className="w-full max-w-4xl mx-auto rounded-2xl rounded-ui border border-slate-200 shadow-lg bg-white overflow-hidden p-4 sm:p-6 md:p-8">
+        <div className="w-full max-w-4xl mx-auto rounded-md border border-slate-200 shadow-lg bg-white overflow-hidden p-4 sm:p-6 md:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
@@ -130,7 +130,7 @@ export function ContactForm() {
                 required
                 value={formData.name}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-900 focus:border-transparent"
               />
             </div>
             <div>
@@ -144,7 +144,7 @@ export function ContactForm() {
                 required
                 value={formData.email}
                 onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-900 focus:border-transparent"
               />
             </div>
             <div>
@@ -159,13 +159,13 @@ export function ContactForm() {
                 value={formData.message}
                 onChange={handleChange}
                 placeholder="Tell us what you're looking for - custom ideas, questions, or details."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent resize-none"
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-gray-900 focus:border-transparent resize-none"
               />
             </div>
 
             <div>
               <div
-                className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-center text-sm text-gray-600 cursor-pointer"
+                className="rounded-md border-2 border-dashed border-gray-300 bg-gray-50 p-4 text-center text-sm text-gray-600 cursor-pointer"
                 onClick={() => document.getElementById('contact-image-input')?.click()}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
@@ -182,7 +182,7 @@ export function ContactForm() {
                 />
                 {imagePreview ? (
                   <div className="flex flex-col items-center gap-2">
-                    <img src={imagePreview} alt="Upload preview" className="h-32 w-32 object-cover rounded-lg border border-gray-200" />
+                    <img src={imagePreview} alt="Upload preview" className="h-32 w-32 object-cover rounded-md border border-gray-200" />
                     <span className="text-xs text-gray-500">Click or drop to replace</span>
                   </div>
                 ) : (
@@ -195,13 +195,13 @@ export function ContactForm() {
             </div>
 
             {submitStatus === 'success' && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm">
                 Thank you for your message! We'll get back to you soon.
               </div>
             )}
 
             {submitStatus === 'error' && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm">
                 {submitError || 'There was an error sending your message. Please try again.'}
               </div>
             )}
@@ -209,7 +209,7 @@ export function ContactForm() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-gray-900 text-white py-3 px-6 rounded-lg rounded-ui font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gray-900 text-white py-3 px-6 rounded-md font-medium hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? 'Sending...' : 'Send Message'}
             </button>

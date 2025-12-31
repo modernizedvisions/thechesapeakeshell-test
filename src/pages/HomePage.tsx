@@ -399,12 +399,12 @@ export function HomePage() {
                 {customShellCards.map((card) => (
                   <div
                     key={card.title}
-                    className="rounded-2xl rounded-ui bg-white/80 border border-slate-100 shadow-md md:shadow-lg backdrop-blur-sm p-5 md:p-6 transition-transform hover:-translate-y-1 hover:shadow-xl"
+                    className="rounded-md bg-black text-white shadow-md md:shadow-lg p-5 md:p-6 transition-transform hover:-translate-y-1 hover:shadow-xl"
                   >
-                    <h3 className="text-sm font-semibold text-slate-900 mb-1.5">
+                    <h3 className="text-sm font-semibold text-white mb-1.5">
                       {card.title}
                     </h3>
-                    <p className="text-xs md:text-sm text-slate-600">
+                    <p className="text-xs md:text-sm text-gray-200">
                       {card.body}
                     </p>
                   </div>
@@ -416,7 +416,7 @@ export function HomePage() {
           <div className="flex justify-center mt-10">
             <button
               onClick={handleScrollToContact}
-              className="inline-flex items-center justify-center rounded-lg bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              className="inline-flex items-center justify-center rounded-full rounded-ui bg-gray-900 px-8 py-3 text-base font-medium text-white shadow-md transition hover:bg-gray-800 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
             >
               Start a Custom Order
             </button>
@@ -482,7 +482,7 @@ export function HomePage() {
           </div>
 
           <div className="mb-10 flex justify-center">
-            <div className="w-full max-w-4xl rounded-2xl border border-slate-200 shadow-lg bg-white overflow-hidden p-4">
+            <div className="w-full max-w-4xl">
               <TikTokEmbed
                 videoId="7582267436842487070"
                 citeUrl="https://www.tiktok.com/@thechesapeakeshell/video/7582267436842487070"

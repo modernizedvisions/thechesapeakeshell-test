@@ -44,6 +44,7 @@ type Env = {
   RESEND_API_KEY?: string;
   PUBLIC_SITE_URL?: string;
   VITE_PUBLIC_SITE_URL?: string;
+  PUBLIC_IMAGES_BASE_URL?: string;
 };
 
 const createStripeClient = (secretKey: string) =>
@@ -296,7 +297,8 @@ export const onRequestPost = async (context: {
         env.DB,
         rawLineItems,
         session.currency || 'usd',
-        siteUrl
+        siteUrl,
+        env.PUBLIC_IMAGES_BASE_URL || null
       );
       const confirmationItems: OrderConfirmationEmailItem[] = baseEmailItems.map((item) => ({
         name: item.name,
@@ -325,7 +327,6 @@ export const onRequestPost = async (context: {
 
         const confirmationUrl =
           siteUrl ? `${siteUrl}/checkout/return?session_id=${session.id}` : `/checkout/return?session_id=${session.id}`;
-        const storeUrl = siteUrl || confirmationUrl;
         const orderLabel = insertResult.displayOrderId || insertResult.orderId;
         const orderDate = formatOrderDate(new Date());
         const shippingAddressText = formatAddressForEmail(shippingAddress, shippingName);
@@ -349,8 +350,8 @@ export const onRequestPost = async (context: {
             subtotal: totalsForEmail.subtotalCents,
             shipping: totalsForEmail.shippingCents,
             total: totalsForEmail.totalCents,
-            primaryCtaUrl: storeUrl,
-            primaryCtaLabel: 'Visit Store',
+            primaryCtaUrl: confirmationUrl,
+            primaryCtaLabel: 'View order details',
           });
           const text = renderOrderConfirmationEmailText({
             brandName: 'The Chesapeake Shell',
@@ -365,8 +366,8 @@ export const onRequestPost = async (context: {
             subtotal: totalsForEmail.subtotalCents,
             shipping: totalsForEmail.shippingCents,
             total: totalsForEmail.totalCents,
-            primaryCtaUrl: storeUrl,
-            primaryCtaLabel: 'Visit Store',
+            primaryCtaUrl: confirmationUrl,
+            primaryCtaLabel: 'View order details',
           });
 
         const emailResult = await sendEmail(
@@ -941,7 +942,8 @@ async function mapLineItemsToEmailItemsWithImages(
   db: D1Database,
   lineItems: Stripe.LineItem[],
   currency: string,
-  siteUrl: string
+  siteUrl: string,
+  imagesBaseUrl: string | null
 ): Promise<EmailItem[]> {
   const fallbackImage = siteUrl ? `${siteUrl}/images/logo-circle.png` : null;
   const items = filterNonShippingLineItems(lineItems).map((line) => {
@@ -977,12 +979,14 @@ async function mapLineItemsToEmailItemsWithImages(
     if (!imageUrl && item.productId) {
       imageUrl = await resolveProductImageUrl(db, item.productId);
     }
-    imageUrl = toAbsoluteUrl(imageUrl, siteUrl) || fallbackImage;
+    const resolvedImageUrl = resolveEmailImageUrl(imageUrl, siteUrl, imagesBaseUrl);
+    const finalImageUrl = resolvedImageUrl || fallbackImage;
+    console.log('[email] item image src', { name: item.name, src: finalImageUrl });
     results.push({
       name: item.name,
       quantity: item.quantity,
       amountCents: item.amountCents,
-      imageUrl,
+      imageUrl: finalImageUrl,
     });
   }
 
@@ -1150,7 +1154,6 @@ async function handleCustomOrderPayment(args: {
     const confirmationUrl = siteUrlForConfirmation
       ? `${siteUrlForConfirmation}/checkout/return?session_id=${session.id}`
       : `/checkout/return?session_id=${session.id}`;
-    const storeUrl = siteUrlForConfirmation || confirmationUrl;
     const orderDate = formatOrderDate(new Date());
     const shippingAddressText = formatAddressForEmail(shippingAddress, shippingName);
     const billingAddressText = formatAddressForEmail(
@@ -1199,8 +1202,8 @@ async function handleCustomOrderPayment(args: {
         subtotal: totalsForEmail.subtotalCents,
         shipping: totalsForEmail.shippingCents,
         total: totalsForEmail.totalCents,
-        primaryCtaUrl: storeUrl,
-        primaryCtaLabel: 'Visit Store',
+        primaryCtaUrl: confirmationUrl,
+        primaryCtaLabel: 'View order details',
       });
       const text = renderOrderConfirmationEmailText({
         brandName: 'The Chesapeake Shell',
@@ -1215,8 +1218,8 @@ async function handleCustomOrderPayment(args: {
         subtotal: totalsForEmail.subtotalCents,
         shipping: totalsForEmail.shippingCents,
         total: totalsForEmail.totalCents,
-        primaryCtaUrl: storeUrl,
-        primaryCtaLabel: 'Visit Store',
+        primaryCtaUrl: confirmationUrl,
+        primaryCtaLabel: 'View order details',
       });
 
       const emailResult = await sendEmail(
@@ -1606,6 +1609,24 @@ function toAbsoluteUrl(url: string | null, siteUrl: string): string | null {
   if (/^https?:\/\//i.test(url)) return url;
   if (url.startsWith('/')) return siteUrl ? `${siteUrl}${url}` : url;
   return url;
+}
+
+function resolveEmailImageUrl(
+  imageUrl: string | null,
+  siteUrl: string,
+  imagesBaseUrl: string | null
+): string | null {
+  if (!imageUrl) return null;
+  const trimmed = imageUrl.trim();
+  if (!trimmed) return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith('/')) return siteUrl ? `${siteUrl}${trimmed}` : trimmed;
+  if (imagesBaseUrl) {
+    const base = imagesBaseUrl.replace(/\/+$/, '');
+    const key = trimmed.replace(/^\/+/, '');
+    return `${base}/${key}`;
+  }
+  return trimmed;
 }
 
 function resolveSiteUrl(env: {
