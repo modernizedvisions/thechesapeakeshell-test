@@ -98,7 +98,7 @@ export function renderOrderConfirmationEmailHtml(params: OrderConfirmationEmailP
     .pad { padding:32px 16px; }
     .section { padding-bottom:24px; }
     .brand { font-size:20px; font-weight:600; color:${baseColor}; }
-    .order-label { font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:${mutedColor}; }
+    .order-label { font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:${mutedColor}; white-space:nowrap; }
     .title { font-size:28px; font-weight:600; color:${baseColor}; margin:0 0 6px; }
     .button { display:inline-block; padding:12px 20px; background:${baseColor}; color:#ffffff; text-decoration:none; border-radius:9999px; font-size:14px; font-weight:600; }
     .subhead { font-size:14px; letter-spacing:0.12em; text-transform:uppercase; color:${mutedColor}; margin:0 0 8px; }
@@ -127,12 +127,12 @@ export function renderOrderConfirmationEmailHtml(params: OrderConfirmationEmailP
         <table role="presentation" class="inner" width="600" cellspacing="0" cellpadding="0">
           <tr>
             <td class="section brand">${escapeHtml(brand)}</td>
-            <td class="section order-label" align="right">ORDER # ${escapeHtml(orderLabel)}</td>
+            <td class="section order-label" align="right" style="white-space:nowrap;">ORDER # ${escapeHtml(orderLabel)}</td>
           </tr>
           <tr>
             <td class="section" colspan="2">
               <p class="title">Thank you for your purchase!</p>
-              <a href="${escapeHtml(params.primaryCtaUrl)}" class="button">${escapeHtml(primaryCtaLabel)}</a>
+              <a href="${escapeHtml(params.primaryCtaUrl)}" class="button" style="display:inline-block; padding:12px 20px; background:${baseColor}; color:#ffffff !important; text-decoration:none !important; border-radius:9999px; font-size:14px; font-weight:600;">${escapeHtml(primaryCtaLabel)}</a>
             </td>
           </tr>
           <tr>
@@ -219,5 +219,9 @@ function escapeHtml(value: string) {
 
 function formatMultilineAddress(value: string) {
   if (!value) return '';
-  return escapeHtml(value).replace(/\n+/g, '<br/>');
+  const lines = value
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return lines.map((line) => escapeHtml(line)).join('<br/>');
 }

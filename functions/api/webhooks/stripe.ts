@@ -300,7 +300,8 @@ export const onRequestPost = async (context: {
         rawLineItems,
         session.currency || 'usd',
         siteUrl,
-        env.PUBLIC_IMAGES_BASE_URL || null
+        env.PUBLIC_IMAGES_BASE_URL || null,
+        emailDebug
       );
       const confirmationItems: OrderConfirmationEmailItem[] = baseEmailItems.map((item) => ({
         name: item.name,
@@ -963,7 +964,8 @@ async function mapLineItemsToEmailItemsWithImages(
   lineItems: Stripe.LineItem[],
   currency: string,
   siteUrl: string,
-  imagesBaseUrl: string | null
+  imagesBaseUrl: string | null,
+  debug = false
 ): Promise<EmailItem[]> {
   const items = filterNonShippingLineItems(lineItems).map((line) => {
     const productObj =
@@ -993,13 +995,16 @@ async function mapLineItemsToEmailItemsWithImages(
   });
 
   const results: EmailItem[] = [];
-  for (const item of items) {
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
     let imageUrl = item.imageUrl || null;
     if (!imageUrl && item.productId) {
       imageUrl = await resolveProductImageUrl(db, item.productId);
     }
     const finalImageUrl = resolveEmailImageUrl(imageUrl, siteUrl, imagesBaseUrl);
-    console.log('[email] item image src', { name: item.name, src: finalImageUrl });
+    if (debug && index === 0) {
+      console.log('[email] item image', { name: item.name, raw: imageUrl, resolved: finalImageUrl });
+    }
     results.push({
       name: item.name,
       quantity: item.quantity,
