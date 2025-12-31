@@ -36,8 +36,9 @@ export async function onRequestPost(context: { request: Request; env: EmailEnv }
     statusLabel: 'PAID',
     customerName: 'Sample Customer',
     customerEmail: 'customer@example.com',
-    shippingAddressLine1: '123 Bay St',
-    shippingAddressLine2: 'Chesapeake, VA 23320, US',
+    shippingAddress: 'Sample Customer\n123 Bay St\nChesapeake, VA 23320\nUS',
+    billingAddress: 'Sample Customer\n123 Bay St\nChesapeake, VA 23320\nUS',
+    paymentMethod: 'Card ending in 4242',
     items: [
       { name: 'Ornament Shell', qtyLabel: 'x1', lineTotal: '$45.00', imageUrl: 'https://placehold.co/56x56' },
       { name: 'Ring Dish', qtyLabel: 'x2', lineTotal: '$64.00', imageUrl: null },
@@ -55,8 +56,9 @@ export async function onRequestPost(context: { request: Request; env: EmailEnv }
     statusLabel: 'PAID',
     customerName: 'Sample Customer',
     customerEmail: 'customer@example.com',
-    shippingAddressLine1: '123 Bay St',
-    shippingAddressLine2: 'Chesapeake, VA 23320, US',
+    shippingAddress: 'Sample Customer\n123 Bay St\nChesapeake, VA 23320\nUS',
+    billingAddress: 'Sample Customer\n123 Bay St\nChesapeake, VA 23320\nUS',
+    paymentMethod: 'Card ending in 4242',
     items: [
       { name: 'Ornament Shell', qtyLabel: 'x1', lineTotal: '$45.00', imageUrl: 'https://placehold.co/56x56' },
       { name: 'Ring Dish', qtyLabel: 'x2', lineTotal: '$64.00', imageUrl: null },
@@ -71,7 +73,7 @@ export async function onRequestPost(context: { request: Request; env: EmailEnv }
   const result = await sendEmail(
     {
       to,
-      subject: 'NEW SALE — The Chesapeake Shell (TEST)',
+      subject: 'NEW SALE - The Chesapeake Shell (TEST)',
       text,
       html,
     },

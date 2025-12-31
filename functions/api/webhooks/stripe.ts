@@ -346,9 +346,9 @@ export const onRequestPost = async (context: {
             orderDate,
             customerName: shippingName || session.customer_details?.name || null,
             customerEmail: customerEmail || undefined,
-            shippingAddress: shippingAddressText || undefined,
-            billingAddress: billingAddressText || undefined,
-            paymentMethod: paymentMethodLabel,
+      shippingAddress: shippingAddressText || undefined,
+      billingAddress: billingAddressText || undefined,
+      paymentMethod: paymentMethodLabel,
             items: confirmationItems,
             subtotal: totalsForEmail.subtotalCents,
             shipping: totalsForEmail.shippingCents,
@@ -373,7 +373,7 @@ export const onRequestPost = async (context: {
             primaryCtaLabel: 'View Order Details',
           });
 
-        const subject = `The Chesapeake Shell — Order Confirmed (${orderLabel})`;
+        const subject = `The Chesapeake Shell - Order Confirmed (${orderLabel})`;
         if (emailDebug) {
           const preview = (html || '').replace(/\s+/g, ' ').slice(0, 300);
           console.log('[email] customer confirmation prepared', {
@@ -415,10 +415,15 @@ export const onRequestPost = async (context: {
 
       if (insertResult && !invoiceId && !customOrderId && !customSource) {
         const orderLabel = insertResult.displayOrderId || insertResult.orderId;
-        const confirmationItems: OwnerNewSaleItem[] = mapLineItemsToEmailItems(
+        const confirmationItemsSource = await mapLineItemsToEmailItemsWithImages(
+          env.DB,
           rawLineItems,
-          session.currency || 'usd'
-        ).map((item) => ({
+          session.currency || 'usd',
+          siteUrl,
+          env.PUBLIC_IMAGES_BASE_URL || null,
+          emailDebug
+        );
+        const confirmationItems: OwnerNewSaleItem[] = confirmationItemsSource.map((item) => ({
           name: item.name,
           qtyLabel: item.quantity > 1 ? `x${item.quantity}` : '',
           lineTotal: formatMoney(item.amountCents),
@@ -445,7 +450,12 @@ export const onRequestPost = async (context: {
         };
         const adminUrl = siteUrl ? `${siteUrl}/admin` : '/admin';
         const stripeUrl = buildStripeDashboardUrl(paymentIntentId, session.id, env.STRIPE_SECRET_KEY);
-        const shippingLines = formatShippingAddressLines(shippingAddress);
+        const shippingAddressText = formatAddressForEmail(shippingAddress, shippingName);
+        const billingAddressText = formatAddressForEmail(
+          session.customer_details?.address || null,
+          session.customer_details?.name || shippingName
+        );
+        const paymentMethodLabel = formatPaymentMethod(cardBrand, cardLast4);
         const orderDate = formatOrderDate(new Date());
 
         try {
@@ -456,8 +466,9 @@ export const onRequestPost = async (context: {
             statusLabel: 'PAID',
             customerName: shippingName || session.customer_details?.name || 'Customer',
             customerEmail: customerEmail || '',
-            shippingAddressLine1: shippingLines.line1,
-            shippingAddressLine2: shippingLines.line2,
+            shippingAddress: shippingAddressText || undefined,
+            billingAddress: billingAddressText || undefined,
+            paymentMethod: paymentMethodLabel,
             items: confirmationItems,
             subtotal: totals.subtotal,
             shipping: totals.shipping,
@@ -472,8 +483,9 @@ export const onRequestPost = async (context: {
             statusLabel: 'PAID',
             customerName: shippingName || session.customer_details?.name || 'Customer',
             customerEmail: customerEmail || '',
-            shippingAddressLine1: shippingLines.line1,
-            shippingAddressLine2: shippingLines.line2,
+            shippingAddress: shippingAddressText || undefined,
+            billingAddress: billingAddressText || undefined,
+            paymentMethod: paymentMethodLabel,
             items: confirmationItems,
             subtotal: totals.subtotal,
             shipping: totals.shipping,
@@ -485,7 +497,7 @@ export const onRequestPost = async (context: {
           const emailResult = await sendEmail(
             {
               to: ownerTo,
-              subject: `NEW SALE GÇö The Chesapeake Shell (${orderLabel})`,
+              subject: `NEW SALE Gï¿½ï¿½ The Chesapeake Shell (${orderLabel})`,
               html,
               text,
             },
@@ -1246,7 +1258,7 @@ async function handleCustomOrderPayment(args: {
         primaryCtaLabel: 'View Order Details',
       });
 
-      const subject = `The Chesapeake Shell — Order Confirmed (${orderLabel})`;
+      const subject = `The Chesapeake Shell - Order Confirmed (${orderLabel})`;
       if (emailDebug) {
         const preview = (html || '').replace(/\s+/g, ' ').slice(0, 300);
         console.log('[email] customer confirmation prepared', {
@@ -1318,7 +1330,12 @@ async function handleCustomOrderPayment(args: {
     shipping: formatMoney(totalsForOwner.shippingCents),
     total: formatMoney(totalsForOwner.totalCents),
   };
-  const shippingLines = formatShippingAddressLines(shippingAddress);
+  const shippingAddressText = formatAddressForEmail(shippingAddress, shippingName);
+  const billingAddressText = formatAddressForEmail(
+    session.customer_details?.address || null,
+    session.customer_details?.name || shippingName
+  );
+  const paymentMethodLabel = formatPaymentMethod(cardBrand, cardLast4);
   const orderDate = formatOrderDate(new Date());
   const stripeUrl = buildStripeDashboardUrl(paymentIntentId, session.id, env.STRIPE_SECRET_KEY);
 
@@ -1330,8 +1347,9 @@ async function handleCustomOrderPayment(args: {
       statusLabel: 'PAID',
       customerName: customOrder.customer_name || shippingName || session.customer_details?.name || 'Customer',
       customerEmail: customerEmail || customOrder.customer_email || '',
-      shippingAddressLine1: shippingLines.line1,
-      shippingAddressLine2: shippingLines.line2,
+            shippingAddress: shippingAddressText || undefined,
+            billingAddress: billingAddressText || undefined,
+            paymentMethod: paymentMethodLabel,
       items: ownerItems,
       subtotal: ownerTotals.subtotal,
       shipping: ownerTotals.shipping,
@@ -1346,8 +1364,9 @@ async function handleCustomOrderPayment(args: {
       statusLabel: 'PAID',
       customerName: customOrder.customer_name || shippingName || session.customer_details?.name || 'Customer',
       customerEmail: customerEmail || customOrder.customer_email || '',
-      shippingAddressLine1: shippingLines.line1,
-      shippingAddressLine2: shippingLines.line2,
+      shippingAddress: shippingAddressText || undefined,
+      billingAddress: billingAddressText || undefined,
+      paymentMethod: paymentMethodLabel,
       items: ownerItems,
       subtotal: ownerTotals.subtotal,
       shipping: ownerTotals.shipping,
@@ -1359,7 +1378,7 @@ async function handleCustomOrderPayment(args: {
     const emailResult = await sendEmail(
       {
         to: ownerTo,
-        subject: `NEW SALE GÇö The Chesapeake Shell (${orderLabel})`,
+        subject: `NEW SALE Gï¿½ï¿½ The Chesapeake Shell (${orderLabel})`,
         html,
         text,
       },
