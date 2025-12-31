@@ -296,7 +296,7 @@ export function HomePage() {
                 {customShellCards.map((card) => (
                   <div
                     key={card.title}
-                    className="rounded-lg bg-white text-slate-900 shadow-md md:shadow-lg p-5 md:p-6 border border-slate-200 transition-transform hover:-translate-y-1 hover:shadow-xl"
+                    className="rounded-md bg-white text-slate-900 shadow-md md:shadow-lg p-5 md:p-6 border border-slate-200 transition-transform hover:-translate-y-1 hover:shadow-xl"
                   >
                     <h3 className="text-sm font-semibold text-slate-900 mb-1.5">
                       {card.title}
