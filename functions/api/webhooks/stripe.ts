@@ -497,7 +497,7 @@ export const onRequestPost = async (context: {
           const emailResult = await sendEmail(
             {
               to: ownerTo,
-              subject: `NEW SALE G�� The Chesapeake Shell (${orderLabel})`,
+              subject: `NEW SALE - The Chesapeake Shell (${orderLabel})`,
               html,
               text,
             },
@@ -1378,7 +1378,7 @@ async function handleCustomOrderPayment(args: {
     const emailResult = await sendEmail(
       {
         to: ownerTo,
-        subject: `NEW SALE G�� The Chesapeake Shell (${orderLabel})`,
+        subject: `NEW SALE - The Chesapeake Shell (${orderLabel})`,
         html,
         text,
       },

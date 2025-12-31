@@ -25,7 +25,7 @@ export function renderCustomOrderPaymentLinkEmailHtml(
       : 0;
   const subtotalCents = Number.isFinite(params.amountCents as number) ? Number(params.amountCents) : 0;
   const totalCents = subtotalCents + shippingCents;
-  const itemLabel = (params.description || '').trim() || 'Custom Order';
+  const itemLabel = params.orderLabel ? `Custom Order ${params.orderLabel}` : 'Custom Order';
   const imageMarkup = params.thumbnailUrl
     ? `<img src="${escapeHtml(params.thumbnailUrl)}" alt="${escapeHtml(itemLabel)}" width="56" height="56" class="item-img" />`
     : '<span class="item-placeholder"></span>';
