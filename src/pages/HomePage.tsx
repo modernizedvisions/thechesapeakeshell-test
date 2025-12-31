@@ -296,7 +296,8 @@ export function HomePage() {
                 {customShellCards.map((card) => (
                   <div
                     key={card.title}
-                    className="rounded-md custom-order-card bg-white text-slate-900 shadow-md md:shadow-lg p-5 md:p-6 border border-slate-200 transition-transform hover:-translate-y-1 hover:shadow-xl"`n                    data-testid="custom-order-card"
+                    className="rounded-md custom-order-card bg-white text-slate-900 shadow-md md:shadow-lg p-5 md:p-6 border border-slate-200 transition-transform hover:-translate-y-1 hover:shadow-xl"
+                    data-testid="custom-order-card"
                   >
                     <h3 className="text-sm font-semibold text-slate-900 mb-1.5">
                       {card.title}
@@ -424,4 +425,5 @@ function normalizeHomeContent(content: HomeSiteContent) {
 
   return { hero, customOrders, rotation: !!content.heroRotationEnabled };
 }
+
 
