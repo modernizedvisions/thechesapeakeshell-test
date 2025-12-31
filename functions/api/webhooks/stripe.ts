@@ -42,6 +42,7 @@ type Env = {
   RESEND_FROM_EMAIL?: string;
   RESEND_REPLY_TO?: string;
   RESEND_API_KEY?: string;
+  EMAIL_DEBUG?: string;
   PUBLIC_SITE_URL?: string;
   VITE_PUBLIC_SITE_URL?: string;
   PUBLIC_IMAGES_BASE_URL?: string;
@@ -62,6 +63,7 @@ export const onRequestPost = async (context: {
   const { request, env } = context;
   const ownerTo = env.RESEND_OWNER_TO || env.EMAIL_OWNER_TO;
   const siteUrl = (env.PUBLIC_SITE_URL || env.VITE_PUBLIC_SITE_URL || '').replace(/\/+$/, '');
+  const emailDebug = env.EMAIL_DEBUG === '1';
   const ok = () =>
     new Response(JSON.stringify({ received: true }), {
       status: 200,
@@ -370,10 +372,23 @@ export const onRequestPost = async (context: {
             primaryCtaLabel: 'View order details',
           });
 
+        const subject = `The Chesapeake Shell — Order Confirmed (${orderLabel})`;
+        if (emailDebug) {
+          const preview = (html || '').replace(/\s+/g, ' ').slice(0, 300);
+          console.log('[email] customer confirmation prepared', {
+            kind: 'shop_customer',
+            to: customerEmail,
+            subject,
+            htmlLen: html?.length ?? 0,
+            textLen: text?.length ?? 0,
+            preview,
+          });
+        }
+        
         const emailResult = await sendEmail(
           {
             to: customerEmail,
-            subject: `The Chesapeake Shell â€” Order Confirmed (${orderLabel})`,
+            subject,
             html,
             text,
           },
@@ -383,6 +398,9 @@ export const onRequestPost = async (context: {
           console.error('[stripe webhook] customer confirmation email failed', emailResult.error);
         }
       } catch (emailError) {
+        if (emailDebug) {
+          console.error('[email] template render failed', emailError);
+        }
         console.error('[stripe webhook] customer confirmation email error', emailError);
       }
     }
@@ -464,7 +482,7 @@ export const onRequestPost = async (context: {
           const emailResult = await sendEmail(
             {
               to: ownerTo,
-              subject: `NEW SALE â€” The Chesapeake Shell (${orderLabel})`,
+              subject: `NEW SALE GÇö The Chesapeake Shell (${orderLabel})`,
               html,
               text,
             },
@@ -1017,6 +1035,7 @@ async function handleCustomOrderPayment(args: {
     cardBrand,
     shippingCents,
   } = args;
+  const emailDebug = env.EMAIL_DEBUG === '1';
 
   await ensureCustomOrdersSchema(db);
   const columns = await db.prepare(`PRAGMA table_info(custom_orders);`).all<{ name: string }>();
@@ -1222,10 +1241,23 @@ async function handleCustomOrderPayment(args: {
         primaryCtaLabel: 'View order details',
       });
 
+      const subject = `The Chesapeake Shell — Order Confirmed (${orderLabel})`;
+      if (emailDebug) {
+        const preview = (html || '').replace(/\s+/g, ' ').slice(0, 300);
+        console.log('[email] customer confirmation prepared', {
+          kind: 'custom_customer',
+          to: confirmationCustomerEmail,
+          subject,
+          htmlLen: html?.length ?? 0,
+          textLen: text?.length ?? 0,
+          preview,
+        });
+      }
+      
       const emailResult = await sendEmail(
         {
           to: confirmationCustomerEmail,
-          subject: `The Chesapeake Shell â€” Order Confirmed (${orderLabel})`,
+          subject,
           html,
           text,
         },
@@ -1235,6 +1267,9 @@ async function handleCustomOrderPayment(args: {
         console.error('[custom order] customer confirmation email failed', emailResult.error);
       }
     } catch (emailError) {
+      if (emailDebug) {
+        console.error('[email] template render failed', emailError);
+      }
       console.error('[custom order] customer confirmation email error', emailError);
     }
   }
@@ -1319,7 +1354,7 @@ async function handleCustomOrderPayment(args: {
     const emailResult = await sendEmail(
       {
         to: ownerTo,
-        subject: `NEW SALE â€” The Chesapeake Shell (${orderLabel})`,
+        subject: `NEW SALE GÇö The Chesapeake Shell (${orderLabel})`,
         html,
         text,
       },
