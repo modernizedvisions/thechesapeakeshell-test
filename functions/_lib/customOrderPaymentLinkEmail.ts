@@ -26,9 +26,6 @@ export function renderCustomOrderPaymentLinkEmailHtml(
   const subtotalCents = Number.isFinite(params.amountCents as number) ? Number(params.amountCents) : 0;
   const totalCents = subtotalCents + shippingCents;
   const itemLabel = params.orderLabel ? `Custom Order ${params.orderLabel}` : 'Custom Order';
-  const imageMarkup = params.thumbnailUrl
-    ? `<img src="${escapeHtml(params.thumbnailUrl)}" alt="${escapeHtml(itemLabel)}" width="56" height="56" class="item-img" />`
-    : '<span class="item-placeholder"></span>';
   const note = (params.description || '').trim();
 
   return `<!doctype html>
@@ -43,6 +40,7 @@ export function renderCustomOrderPaymentLinkEmailHtml(
     body, table, td, a, p, div, span { font-family:${baseFont}; }
     .container { width:100%; background:#ffffff; }
     .inner { width:600px; max-width:600px; }
+    .items-table { width:100%; table-layout:fixed; }
     .pad { padding:32px 16px; }
     .section { padding-bottom:24px; }
     .brand { font-size:20px; font-weight:600; color:${baseColor}; }
@@ -52,13 +50,10 @@ export function renderCustomOrderPaymentLinkEmailHtml(
     .button { display:inline-block; padding:12px 20px; background:${baseColor}; color:#ffffff; text-decoration:none; border-radius:9999px; font-size:14px; font-weight:600; }
     .subhead { font-size:14px; letter-spacing:0.12em; text-transform:uppercase; color:${mutedColor}; margin:0 0 8px; }
     .item-row td { padding:12px 0; border-bottom:1px solid #ededed; vertical-align:top; }
-    .item-info { width:100%; }
-    .item-media { display:inline-block; width:56px; height:56px; vertical-align:top; }
-    .item-text { display:inline-block; vertical-align:top; margin-left:12px; max-width:420px; }
-    .item-img { width:56px; height:56px; border:1px solid ${borderColor}; object-fit:cover; display:block; }
-    .item-placeholder { width:56px; height:56px; border:1px solid ${borderColor}; background:#f3f4f6; display:block; }
+    .item-text { font-size:16px; font-weight:600; color:${baseColor}; }
+    .item-desc { font-size:13px; color:${mutedColor}; margin-top:4px; line-height:1.5; font-weight:400; }
     .item-name { font-size:16px; font-weight:600; color:${baseColor}; }
-    .item-desc { font-size:13px; color:${mutedColor}; margin-top:4px; }
+    .item-desc { font-size:13px; color:${mutedColor}; margin-top:4px; line-height:1.5; font-weight:400; }
     .item-price { font-size:15px; font-weight:600; color:${baseColor}; white-space:nowrap; }
     .totals-label { padding:4px 0; font-size:14px; color:${mutedColor}; }
     .totals-value { padding:4px 0; font-size:14px; color:${baseColor}; font-weight:600; }
@@ -86,27 +81,32 @@ export function renderCustomOrderPaymentLinkEmailHtml(
               <p class="subhead">Order summary</p>
             </td>
           </tr>
-          <tr class="item-row">
-            <td class="item-info">
-              <span class="item-media">${imageMarkup}</span>
-              <span class="item-text">
-                <span class="item-name">${escapeHtml(itemLabel)}</span>
-                ${note ? `<span class="item-desc">${escapeHtml(note)}</span>` : ''}
-              </span>
+          <tr>
+            <td colspan="2">
+              <table role="presentation" class="items-table" cellspacing="0" cellpadding="0">
+                <tr class="item-row">
+                  <td style="padding:16px 0; vertical-align:top;">
+                    <div class="item-name">${escapeHtml(itemLabel)}</div>
+                    ${note ? `<div class="item-desc">${escapeHtml(note)}</div>` : ''}
+                  </td>
+                  <td class="item-price" align="right" style="padding:16px 0; vertical-align:top; white-space:nowrap; width:120px;">
+                    ${formatMoney(subtotalCents)}
+                  </td>
+                </tr>
+                <tr>
+                  <td class="totals-label" align="right">Subtotal</td>
+                  <td class="totals-value" align="right">${formatMoney(subtotalCents)}</td>
+                </tr>
+                <tr>
+                  <td class="totals-label" align="right">Shipping</td>
+                  <td class="totals-value" align="right">${formatMoney(shippingCents)}</td>
+                </tr>
+                <tr class="total-row">
+                  <td align="right">Total</td>
+                  <td align="right">${formatMoney(totalCents)}</td>
+                </tr>
+              </table>
             </td>
-            <td class="item-price" align="right">${formatMoney(subtotalCents)}</td>
-          </tr>
-          <tr>
-            <td class="totals-label" align="right">Subtotal</td>
-            <td class="totals-value" align="right">${formatMoney(subtotalCents)}</td>
-          </tr>
-          <tr>
-            <td class="totals-label" align="right">Shipping</td>
-            <td class="totals-value" align="right">${formatMoney(shippingCents)}</td>
-          </tr>
-          <tr class="total-row">
-            <td align="right">Total</td>
-            <td align="right">${formatMoney(totalCents)}</td>
           </tr>
           <tr>
             <td class="footer" colspan="2">If you have any questions, reply to this email.</td>
