@@ -23,6 +23,7 @@ type CustomOrderRow = {
   customer_email: string | null;
   customer_email1?: string | null;
   description: string | null;
+  image_url?: string | null;
   amount: number | null;
   payment_link?: string | null;
   shipping_name?: string | null;
@@ -91,7 +92,7 @@ export async function onRequestPost(context: {
     const order = await env.DB.prepare(
       `SELECT id, display_custom_order_id, customer_name, ${
         emailCol ? `${emailCol} AS customer_email` : 'NULL AS customer_email'
-      }, description, amount, payment_link,
+      }, description, image_url, amount, payment_link,
       shipping_name, shipping_line1, shipping_line2, shipping_city, shipping_state, shipping_postal_code, shipping_country, shipping_phone
        FROM custom_orders WHERE id = ?`
     )
@@ -179,7 +180,7 @@ export async function onRequestPost(context: {
       amountCents: amount,
       currency: 'usd',
       shippingCents,
-      thumbnailUrl: null,
+      thumbnailUrl: order.image_url || null,
       description: order.description || null,
     });
     const text = renderCustomOrderPaymentLinkEmailText({
@@ -189,7 +190,7 @@ export async function onRequestPost(context: {
       amountCents: amount,
       currency: 'usd',
       shippingCents,
-      thumbnailUrl: null,
+      thumbnailUrl: order.image_url || null,
       description: order.description || null,
     });
 
@@ -242,6 +243,7 @@ async function ensureCustomOrdersSchema(db: D1Database) {
     customer_name TEXT,
     customer_email TEXT,
     description TEXT,
+    image_url TEXT,
     amount INTEGER,
     message_id TEXT,
     status TEXT DEFAULT 'pending',
@@ -278,6 +280,9 @@ async function ensureCustomOrdersSchema(db: D1Database) {
   }
   if (!names.includes('paid_at')) {
     await db.prepare(`ALTER TABLE custom_orders ADD COLUMN paid_at TEXT;`).run();
+  }
+  if (!names.includes('image_url')) {
+    await db.prepare(`ALTER TABLE custom_orders ADD COLUMN image_url TEXT;`).run();
   }
   const shippingColumns = [
     'shipping_name',

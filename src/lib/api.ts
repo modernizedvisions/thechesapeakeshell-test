@@ -40,7 +40,7 @@ export const fetchReviewsForProduct = getReviewsForProduct;
 
 export { createEmbeddedCheckoutSession, fetchCheckoutSession, sendContactEmail, verifyAdminPassword };
 
-export type UploadScope = 'products' | 'gallery' | 'home' | 'categories';
+export type UploadScope = 'products' | 'gallery' | 'home' | 'categories' | 'custom-orders';
 
 export async function fetchGalleryImages() {
   const response = await fetch('/api/gallery', {

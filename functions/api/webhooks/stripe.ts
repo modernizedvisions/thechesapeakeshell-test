@@ -900,6 +900,7 @@ async function ensureCustomOrdersSchema(db: D1Database) {
     customer_name TEXT,
     customer_email TEXT,
     description TEXT,
+    image_url TEXT,
     amount INTEGER,
     message_id TEXT,
     status TEXT DEFAULT 'pending',
@@ -922,6 +923,9 @@ async function ensureCustomOrdersSchema(db: D1Database) {
   }
   if (!names.includes('paid_at')) {
     await db.prepare(`ALTER TABLE custom_orders ADD COLUMN paid_at TEXT;`).run();
+  }
+  if (!names.includes('image_url')) {
+    await db.prepare(`ALTER TABLE custom_orders ADD COLUMN image_url TEXT;`).run();
   }
   const shippingCols = [
     'shipping_name',
@@ -1073,7 +1077,7 @@ async function handleCustomOrderPayment(args: {
     .prepare(
       `SELECT id, display_custom_order_id, customer_name, ${
         emailCol ? `${emailCol} AS customer_email` : 'NULL AS customer_email'
-      }, description, amount, payment_link, stripe_session_id, stripe_payment_intent_id,
+      }, description, image_url, amount, payment_link, stripe_session_id, stripe_payment_intent_id,
          shipping_name, shipping_line1, shipping_line2, shipping_city, shipping_state, shipping_postal_code, shipping_country, shipping_phone
        FROM custom_orders WHERE id = ?`
     )
@@ -1084,6 +1088,7 @@ async function handleCustomOrderPayment(args: {
       customer_name: string | null;
       customer_email: string | null;
       description: string | null;
+      image_url?: string | null;
       amount: number | null;
       payment_link: string | null;
       stripe_session_id?: string | null;
@@ -1220,7 +1225,7 @@ async function handleCustomOrderPayment(args: {
         qty: 1,
         unitAmount: amount,
         lineTotal: amount,
-        imageUrl: null,
+        imageUrl: customOrder.image_url || null,
       },
     ];
 
@@ -1305,7 +1310,7 @@ async function handleCustomOrderPayment(args: {
       name: customOrder.description || 'Custom order',
       qtyLabel: '',
       lineTotal: formatMoney(amount),
-      imageUrl: null,
+      imageUrl: customOrder.image_url || null,
     },
   ];
   const totalsForOwner = resolveCustomEmailTotals({

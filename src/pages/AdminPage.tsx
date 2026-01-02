@@ -25,6 +25,7 @@ import {
   getAdminCustomOrders,
   createAdminCustomOrder,
   sendAdminCustomOrderPaymentLink,
+  updateAdminCustomOrder,
 } from '../lib/db/customOrders';
 import type { AdminCustomOrder } from '../lib/db/customOrders';
 
@@ -992,6 +993,7 @@ export function AdminPage() {
                   customerName: order.customerName,
                   customerEmail: order.customerEmail,
                   description: order.description,
+                  imageUrl: order.imageUrl ?? null,
                   amount: order.amount ? Math.round(Number(order.amount) * 100) : undefined,
                   messageId: order.messageId ?? null,
                 });
@@ -1003,6 +1005,20 @@ export function AdminPage() {
               } catch (err) {
                 console.error('Failed to create custom order', err);
                 setCustomOrdersError(err instanceof Error ? err.message : 'Failed to create custom order');
+              }
+            }}
+            onUpdateOrder={async (orderId, patch) => {
+              try {
+                await updateAdminCustomOrder(orderId, patch);
+                setCustomOrders((prev) =>
+                  prev.map((order) =>
+                    order.id === orderId ? { ...order, ...patch } : order
+                  )
+                );
+              } catch (err) {
+                console.error('Failed to update custom order', err);
+                setCustomOrdersError(err instanceof Error ? err.message : 'Failed to update custom order');
+                throw err;
               }
             }}
             initialDraft={customOrderDraft}

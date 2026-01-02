@@ -16,6 +16,7 @@ type CustomOrderRow = {
   customer_email: string | null;
   customer_email1?: string | null;
   description: string | null;
+  image_url?: string | null;
   amount: number | null;
   message_id: string | null;
   status: string | null;
@@ -36,6 +37,7 @@ type CustomOrderPayload = {
   customerName: string;
   customerEmail: string;
   description: string;
+  imageUrl?: string | null;
   amount?: number;
   messageId?: string | null;
   status?: 'pending' | 'paid';
@@ -52,7 +54,7 @@ export async function onRequestGet(context: { env: { DB: D1Database } }): Promis
     const statement = context.env.DB.prepare(
       `SELECT id, display_custom_order_id, customer_name, ${
         emailCol ? `${emailCol} AS customer_email` : 'NULL AS customer_email'
-      }, description, amount, message_id, status, payment_link,
+      }, description, image_url, amount, message_id, status, payment_link,
         shipping_name, shipping_line1, shipping_line2, shipping_city, shipping_state, shipping_postal_code, shipping_country, shipping_phone,
         paid_at, created_at
        FROM custom_orders
@@ -79,6 +81,9 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
     if (!body || !body.customerName || !body.customerEmail || !body.description) {
       return jsonResponse({ error: 'customerName, customerEmail, and description are required.' }, 400);
     }
+    if (isBlockedImageUrl(body.imageUrl)) {
+      return jsonResponse({ error: 'imageUrl must be uploaded first (no blob/data URLs).' }, 400);
+    }
 
     const id = crypto.randomUUID();
     const createdAt = new Date().toISOString();
@@ -91,6 +96,7 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
       'customer_name',
       emailCol ?? undefined,
       'description',
+      'image_url',
       'amount',
       'message_id',
       'status',
@@ -116,6 +122,7 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
     }
     values.push(
       body.description.trim(),
+      body.imageUrl?.trim() || null,
       body.amount ?? null,
       body.messageId ?? null,
       status,
@@ -148,6 +155,7 @@ export async function onRequestPost(context: { env: { DB: D1Database }; request:
       customer_name: body.customerName.trim(),
       customer_email: emailCol ? body.customerEmail.trim() : null,
       description: body.description.trim(),
+      image_url: body.imageUrl?.trim() || null,
       amount: body.amount ?? null,
       message_id: body.messageId ?? null,
       status,
@@ -174,6 +182,7 @@ async function ensureCustomOrdersSchema(db: D1Database) {
     customer_name TEXT,
     customer_email TEXT,
     description TEXT,
+    image_url TEXT,
     amount INTEGER,
     message_id TEXT,
     status TEXT DEFAULT 'pending',
@@ -210,6 +219,9 @@ async function ensureCustomOrdersSchema(db: D1Database) {
   }
   if (!names.includes('paid_at')) {
     await db.prepare(`ALTER TABLE custom_orders ADD COLUMN paid_at TEXT;`).run();
+  }
+  if (!names.includes('image_url')) {
+    await db.prepare(`ALTER TABLE custom_orders ADD COLUMN image_url TEXT;`).run();
   }
   const shippingColumns = [
     'shipping_name',
@@ -264,6 +276,7 @@ function mapRow(row: CustomOrderRow) {
     customerName: row.customer_name ?? '',
     customerEmail: row.customer_email ?? row.customer_email1 ?? '',
     description: row.description ?? '',
+    imageUrl: row.image_url ?? null,
     amount: row.amount ?? null,
     messageId: row.message_id ?? null,
     status: (row.status as 'pending' | 'paid') ?? 'pending',
@@ -285,6 +298,11 @@ function jsonResponse(data: unknown, status = 200) {
       expires: '0',
     },
   });
+}
+
+function isBlockedImageUrl(value?: string | null) {
+  if (!value) return false;
+  return value.startsWith('data:') || value.startsWith('blob:');
 }
 
 async function generateDisplayCustomOrderId(db: D1Database): Promise<string> {

@@ -19,6 +19,11 @@ type ProductRow = {
   is_one_off?: number | null;
 };
 
+type CustomOrderRow = {
+  id: string;
+  image_url?: string | null;
+};
+
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -117,6 +122,18 @@ export const onRequestGet = async (context: {
         : null;
 
     const lineItemsRaw = session.line_items?.data ?? [];
+    const customOrderId = session.metadata?.customOrderId || null;
+    let customOrderImageUrl: string | null = null;
+    if (customOrderId && env.DB) {
+      try {
+        const row = await env.DB.prepare(`SELECT id, image_url FROM custom_orders WHERE id = ?`)
+          .bind(customOrderId)
+          .first<CustomOrderRow>();
+        customOrderImageUrl = row?.image_url || null;
+      } catch (err) {
+        console.error('Failed to load custom order image', err);
+      }
+    }
 
     const stripeProductIds = lineItemsRaw
       .map((li) => {
@@ -197,6 +214,7 @@ export const onRequestGet = async (context: {
         const priceMatch = !keyMatch && stripePriceId ? productLookup.get(stripePriceId) : null;
         const matchedProduct = keyMatch || priceMatch || null;
         const isShipping = /shipping/i.test(productName) && !matchedProduct;
+        const isCustomOrder = /custom order/i.test(productName) && !matchedProduct;
         const lineTotal = li.amount_total ?? 0;
         if (isShipping) {
           shippingAmount += lineTotal;
@@ -205,7 +223,7 @@ export const onRequestGet = async (context: {
           productName,
           quantity: li.quantity ?? 0,
           lineTotal,
-          imageUrl: pickPrimaryImage(matchedProduct),
+          imageUrl: isCustomOrder ? customOrderImageUrl : pickPrimaryImage(matchedProduct),
           oneOff: matchedProduct ? matchedProduct.is_one_off === 1 : false,
           isShipping,
           stripeProductId,

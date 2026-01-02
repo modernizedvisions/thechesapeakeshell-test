@@ -4,6 +4,7 @@ export type AdminCustomOrder = {
   customerName: string;
   customerEmail: string;
   description: string;
+  imageUrl?: string | null;
   amount: number | null;
   status: 'pending' | 'paid';
   paymentLink: string | null;
@@ -61,6 +62,7 @@ export async function createAdminCustomOrder(payload: {
   customerName: string;
   customerEmail: string;
   description: string;
+  imageUrl?: string | null;
   amount?: number;
   messageId?: string | null;
 }): Promise<AdminCustomOrder> {
@@ -92,6 +94,7 @@ export async function createAdminCustomOrder(payload: {
     customerName: payload.customerName,
     customerEmail: payload.customerEmail,
     description: payload.description,
+    imageUrl: payload.imageUrl ?? null,
     amount: payload.amount ?? null,
     status: 'pending',
     paymentLink: payload.paymentLink ?? null,
@@ -105,6 +108,7 @@ export async function updateAdminCustomOrder(
     customerName: string;
     customerEmail: string;
     description: string;
+    imageUrl: string | null;
     amount: number | null;
     status: 'pending' | 'paid';
     paymentLink: string | null;

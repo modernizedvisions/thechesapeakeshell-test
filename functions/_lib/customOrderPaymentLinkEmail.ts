@@ -27,6 +27,12 @@ export function renderCustomOrderPaymentLinkEmailHtml(
   const totalCents = subtotalCents + shippingCents;
   const itemLabel = params.orderLabel ? `Custom Order ${params.orderLabel}` : 'Custom Order';
   const note = (params.description || '').trim();
+  const hasImage = !!params.thumbnailUrl;
+  const imageCell = hasImage
+    ? `<td style="padding:16px 12px 16px 0; width:72px; vertical-align:top;">
+        <img src="${escapeHtml(params.thumbnailUrl || '')}" alt="${escapeHtml(itemLabel)}" width="72" height="72" style="width:72px; height:72px; border:1px solid ${borderColor}; object-fit:cover; display:block;" />
+      </td>`
+    : '';
 
   return `<!doctype html>
 <html>
@@ -85,6 +91,7 @@ export function renderCustomOrderPaymentLinkEmailHtml(
             <td colspan="2">
               <table role="presentation" class="items-table" cellspacing="0" cellpadding="0">
                 <tr class="item-row">
+                  ${imageCell}
                   <td style="padding:16px 0; vertical-align:top;">
                     <div class="item-name">${escapeHtml(itemLabel)}</div>
                     ${note ? `<div class="item-desc">${escapeHtml(note)}</div>` : ''}

@@ -13,6 +13,7 @@ type CustomOrderPayload = {
   customerName?: string;
   customerEmail?: string;
   description?: string;
+  imageUrl?: string | null;
   amount?: number | null;
   messageId?: string | null;
   status?: 'pending' | 'paid';
@@ -30,6 +31,9 @@ export async function onRequestPatch(context: { env: { DB: D1Database }; request
 
     const body = (await context.request.json().catch(() => null)) as Partial<CustomOrderPayload> | null;
     if (!body) return jsonResponse({ error: 'Invalid body' }, 400);
+    if (isBlockedImageUrl(body.imageUrl)) {
+      return jsonResponse({ error: 'imageUrl must be uploaded first (no blob/data URLs).' }, 400);
+    }
 
     const existing = await context.env.DB
       .prepare(`SELECT id FROM custom_orders WHERE id = ?`)
@@ -55,6 +59,10 @@ export async function onRequestPatch(context: { env: { DB: D1Database }; request
     if (body.description !== undefined) {
       fields.push('description = ?');
       values.push(body.description.trim());
+    }
+    if (body.imageUrl !== undefined) {
+      fields.push('image_url = ?');
+      values.push(body.imageUrl ? body.imageUrl.trim() : null);
     }
     if (body.amount !== undefined) {
       fields.push('amount = ?');
@@ -101,6 +109,7 @@ async function ensureCustomOrdersSchema(db: D1Database) {
     customer_name TEXT,
     customer_email TEXT,
     description TEXT,
+    image_url TEXT,
     amount INTEGER,
     message_id TEXT,
     status TEXT DEFAULT 'pending',
@@ -130,6 +139,9 @@ async function ensureCustomOrdersSchema(db: D1Database) {
   }
   if (!names.includes('paid_at')) {
     await db.prepare(`ALTER TABLE custom_orders ADD COLUMN paid_at TEXT;`).run();
+  }
+  if (!names.includes('image_url')) {
+    await db.prepare(`ALTER TABLE custom_orders ADD COLUMN image_url TEXT;`).run();
   }
   const shippingCols = [
     'shipping_name',
@@ -173,4 +185,9 @@ function jsonResponse(data: unknown, status = 200) {
       expires: '0',
     },
   });
+}
+
+function isBlockedImageUrl(value?: string | null) {
+  if (!value) return false;
+  return value.startsWith('data:') || value.startsWith('blob:');
 }

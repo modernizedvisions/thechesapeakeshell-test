@@ -1,11 +1,15 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react';
+import { useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useForm } from 'react-hook-form';
 import { AdminSectionHeader } from './AdminSectionHeader';
+import { AdminSaveButton } from './AdminSaveButton';
+import { adminUploadImageScoped } from '../../lib/api';
 
 interface AdminCustomOrdersTabProps {
   allCustomOrders: any[];
   onCreateOrder: (data: any) => Promise<void> | void;
+  onUpdateOrder?: (id: string, data: any) => Promise<void> | void;
   onReloadOrders?: () => Promise<void> | void;
   onSendPaymentLink?: (id: string) => Promise<void> | void;
   initialDraft?: any;
@@ -14,9 +18,17 @@ interface AdminCustomOrdersTabProps {
   error?: string | null;
 }
 
+type CustomOrderImageState = {
+  url: string | null;
+  previewUrl?: string | null;
+  uploading: boolean;
+  uploadError?: string | null;
+};
+
 export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
   allCustomOrders,
   onCreateOrder,
+  onUpdateOrder,
   onReloadOrders,
   onSendPaymentLink,
   initialDraft,
@@ -27,6 +39,17 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
+  const createImageInputRef = useRef<HTMLInputElement | null>(null);
+  const viewImageInputRef = useRef<HTMLInputElement | null>(null);
+  const buildImageState = (url?: string | null): CustomOrderImageState => ({
+    url: url || null,
+    previewUrl: url || null,
+    uploading: false,
+    uploadError: null,
+  });
+  const [draftImage, setDraftImage] = useState<CustomOrderImageState>(() => buildImageState(null));
+  const [viewImage, setViewImage] = useState<CustomOrderImageState>(() => buildImageState(null));
+  const [viewSaveState, setViewSaveState] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const draftDefaults = useMemo(() => {
     if (!initialDraft) return undefined;
     return {
@@ -62,8 +85,57 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
         description: '',
         amount: '',
       });
+      setDraftImage(buildImageState(null));
     }
   }, [isModalOpen, reset]);
+
+  const startImageUpload = async (
+    file: File,
+    setState: React.Dispatch<React.SetStateAction<CustomOrderImageState>>
+  ) => {
+    const previewUrl = URL.createObjectURL(file);
+    let previousUrl: string | null = null;
+    setState((prev) => {
+      previousUrl = prev.url ?? null;
+      return {
+        ...prev,
+        previewUrl,
+        uploading: true,
+        uploadError: null,
+      };
+    });
+
+    try {
+      const result = await adminUploadImageScoped(file, { scope: 'custom-orders' });
+      if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+      setState({
+        url: result.url,
+        previewUrl: result.url,
+        uploading: false,
+        uploadError: null,
+      });
+    } catch (err) {
+      if (previewUrl.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+      const message = err instanceof Error ? err.message : 'Upload failed';
+      setState({
+        url: previousUrl,
+        previewUrl: previousUrl,
+        uploading: false,
+        uploadError: message,
+      });
+    }
+  };
+
+  const removeImage = (
+    setState: React.Dispatch<React.SetStateAction<CustomOrderImageState>>
+  ) => {
+    setState((prev) => {
+      if (prev.previewUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(prev.previewUrl);
+      }
+      return buildImageState(null);
+    });
+  };
 
   if (import.meta.env.DEV) {
     console.debug('[custom orders tab] render', { count: allCustomOrders.length });
@@ -71,12 +143,16 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
 
   const openView = (order: any) => {
     setSelectedOrder(order);
+    setViewImage(buildImageState(order.imageUrl || order.image_url || null));
+    setViewSaveState('idle');
     setIsViewOpen(true);
   };
 
   const closeView = () => {
     setIsViewOpen(false);
     setSelectedOrder(null);
+    setViewImage(buildImageState(null));
+    setViewSaveState('idle');
   };
 
   const formatCurrency = (cents: number | null | undefined) => `$${((cents ?? 0) / 100).toFixed(2)}`;
@@ -279,8 +355,66 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
                 <section className="rounded-lg border border-slate-200 p-4">
                   <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500 mb-2">Message</p>
                   <div className="text-sm text-slate-900 whitespace-pre-wrap">
-                    {selectedOrder.description || '—'}
+                    {selectedOrder.description || '-'}
                   </div>
+                </section>
+
+                <section className="rounded-lg border border-slate-200 p-4">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-slate-500 mb-2">Image</p>
+                  <div className="flex flex-wrap items-start gap-4">
+                    <div className="h-24 w-24 rounded-md border border-slate-200 bg-slate-50 overflow-hidden">
+                      {viewImage.previewUrl ? (
+                        <img
+                          src={viewImage.previewUrl}
+                          alt="Custom order"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-xs text-slate-400">
+                          No image
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => viewImageInputRef.current?.click()}
+                        className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
+                      >
+                        {viewImage.url ? 'Replace Image' : 'Upload Image'}
+                      </button>
+                      {viewImage.url && (
+                        <button
+                          type="button"
+                          onClick={() => removeImage(setViewImage)}
+                          className="block text-xs text-slate-600 underline hover:text-slate-800"
+                        >
+                          Remove image
+                        </button>
+                      )}
+                      {viewImage.uploading && (
+                        <div className="text-xs text-slate-500">Uploading image...</div>
+                      )}
+                      {viewImage.uploadError && (
+                        <div className="text-xs text-red-600">{viewImage.uploadError}</div>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    ref={viewImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        void startImageUpload(file, setViewImage);
+                      }
+                      if (viewImageInputRef.current) {
+                        viewImageInputRef.current.value = '';
+                      }
+                    }}
+                  />
                 </section>
 
                 <section className="rounded-lg border border-slate-200 p-4">
@@ -311,6 +445,37 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
                     <div className="text-sm text-slate-600">Not sent yet.</div>
                   )}
                 </section>
+
+                <div className="flex justify-end">
+                  <AdminSaveButton
+                    saveState={viewSaveState}
+                    onClick={async () => {
+                      if (!selectedOrder || !onUpdateOrder) return;
+                      const currentUrl = selectedOrder.imageUrl || selectedOrder.image_url || null;
+                      if (viewImage.uploading || viewImage.uploadError || viewImage.url === currentUrl) return;
+                      setViewSaveState('saving');
+                      try {
+                        await onUpdateOrder(selectedOrder.id, { imageUrl: viewImage.url });
+                        setSelectedOrder((prev: any) =>
+                          prev ? { ...prev, imageUrl: viewImage.url } : prev
+                        );
+                        setViewSaveState('success');
+                        setTimeout(() => setViewSaveState('idle'), 1500);
+                      } catch (err) {
+                        console.error('Failed to update custom order', err);
+                        setViewSaveState('error');
+                        setTimeout(() => setViewSaveState('idle'), 1500);
+                      }
+                    }}
+                    disabled={
+                      !onUpdateOrder ||
+                      viewImage.uploading ||
+                      !!viewImage.uploadError ||
+                      viewImage.url === (selectedOrder.imageUrl || selectedOrder.image_url || null)
+                    }
+                    idleLabel="Save Changes"
+                  />
+                </div>
               </div>
             </div>
           </DialogContent>
@@ -326,7 +491,8 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
             <form
               className="space-y-4"
               onSubmit={handleSubmit(async (values) => {
-                await onCreateOrder(values);
+                if (draftImage.uploading || draftImage.uploadError) return;
+                await onCreateOrder({ ...values, imageUrl: draftImage.url || null });
                 setIsModalOpen(false);
               })}
             >
@@ -358,6 +524,64 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Image (optional)</label>
+                <div className="flex flex-wrap items-start gap-4">
+                  <div className="h-24 w-24 rounded-md border border-slate-200 bg-slate-50 overflow-hidden">
+                    {draftImage.previewUrl ? (
+                      <img
+                        src={draftImage.previewUrl}
+                        alt="Custom order"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-xs text-slate-400">
+                        No image
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => createImageInputRef.current?.click()}
+                      className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:border-gray-400"
+                    >
+                      {draftImage.url ? 'Replace Image' : 'Upload Image'}
+                    </button>
+                    {draftImage.url && (
+                      <button
+                        type="button"
+                        onClick={() => removeImage(setDraftImage)}
+                        className="block text-xs text-slate-600 underline hover:text-slate-800"
+                      >
+                        Remove image
+                      </button>
+                    )}
+                    {draftImage.uploading && (
+                      <div className="text-xs text-slate-500">Uploading image...</div>
+                    )}
+                    {draftImage.uploadError && (
+                      <div className="text-xs text-red-600">{draftImage.uploadError}</div>
+                    )}
+                  </div>
+                </div>
+                <input
+                  ref={createImageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      void startImageUpload(file, setDraftImage);
+                    }
+                    if (createImageInputRef.current) {
+                      createImageInputRef.current.value = '';
+                    }
+                  }}
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Amount (USD)</label>
                 <input
                   type="number"
@@ -378,7 +602,7 @@ export const AdminCustomOrdersTab: React.FC<AdminCustomOrdersTabProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={formState.isSubmitting}
+                  disabled={formState.isSubmitting || draftImage.uploading || !!draftImage.uploadError}
                   className="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-60"
                 >
                   {formState.isSubmitting ? 'Saving...' : 'Save'}

@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS custom_orders (
   customer_name TEXT,
   customer_email TEXT,
   description TEXT,
+  image_url TEXT,
   amount INTEGER,
   message_id TEXT,
   status TEXT DEFAULT 'pending',

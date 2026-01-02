@@ -28,6 +28,16 @@ type ProductRow = {
   created_at: string | null;
 };
 
+type CustomOrderRow = {
+  id: string;
+  display_custom_order_id?: string | null;
+  description?: string | null;
+  image_url?: string | null;
+  paid_at?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+};
+
 export async function onRequestGet(context: { env: { DB: D1Database }; request: Request }): Promise<Response> {
   try {
     await ensureProductSchema(context.env.DB);
@@ -82,6 +92,53 @@ export async function onRequestGet(context: { env: { DB: D1Database }; request: 
         slug: row.slug ?? undefined,
       };
     });
+
+    if (isSoldFilter) {
+      try {
+        const { results: customResults } = await context.env.DB.prepare(
+          `
+          SELECT id, display_custom_order_id, description, image_url, paid_at, status, created_at
+          FROM custom_orders
+          WHERE status = 'paid'
+          ORDER BY datetime(paid_at) DESC, datetime(created_at) DESC;
+        `
+        ).all<CustomOrderRow>();
+        const customOrders = (customResults || []).map((row) => {
+          const displayId = row.display_custom_order_id || row.id;
+          const name = displayId ? `Custom Order ${displayId}` : 'Custom Order';
+          const imageUrl = row.image_url || '';
+          return {
+            id: `custom_order:${row.id}`,
+            name,
+            description: row.description || '',
+            imageUrls: imageUrl ? [imageUrl] : [],
+            imageUrl,
+            thumbnailUrl: imageUrl || undefined,
+            type: 'Custom',
+            category: 'Custom',
+            categories: ['Custom'],
+            collection: 'Custom Orders',
+            oneoff: true,
+            visible: true,
+            isSold: true,
+            priceCents: undefined,
+            soldAt: row.paid_at || row.created_at || undefined,
+            quantityAvailable: 0,
+            stripeProductId: undefined,
+            stripePriceId: undefined,
+            slug: undefined,
+          } as Product;
+        });
+        products.push(...customOrders);
+      } catch (error) {
+        console.error('Failed to load custom orders for sold list', error);
+      }
+      products.sort((a, b) => {
+        const aTime = a.soldAt ? new Date(a.soldAt).getTime() : 0;
+        const bTime = b.soldAt ? new Date(b.soldAt).getTime() : 0;
+        return bTime - aTime;
+      });
+    }
 
     return new Response(JSON.stringify({ products }), {
       status: 200,

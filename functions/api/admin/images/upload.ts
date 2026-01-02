@@ -5,7 +5,7 @@ type Env = {
 
 const BUILD_FINGERPRINT = 'upload-fingerprint-2025-12-21-a';
 const DEFAULT_SCOPE = 'products';
-const VALID_SCOPES = new Set(['products', 'gallery', 'home', 'categories']);
+const VALID_SCOPES = new Set(['products', 'gallery', 'home', 'categories', 'custom-orders']);
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
