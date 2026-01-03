@@ -8,8 +8,8 @@ export function AboutPage() {
           <h1 className="text-4xl font-serif font-bold text-gray-900 mb-8">About the Artist</h1>
 
           <div className="grid gap-10 lg:grid-cols-2 items-start">
-            <div className="space-y-5 text-gray-700 order-2 lg:order-1">
-              <p className="text-lg text-gray-900">
+            <div className="space-y-5 font-serif text-gray-700 order-2 lg:order-1">
+              <p>
                 Hi, I’m so glad you’re here! I’m a 36-year-old Eastern Shore native, born and raised in Salisbury,
                 Maryland. Growing up surrounded by the water, shells, and coastal charm sparked a love for all things
                 beach-inspired that never left me.
